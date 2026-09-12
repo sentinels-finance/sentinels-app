@@ -7,6 +7,7 @@ import {
 } from "@/lib/wallet/assets";
 import { ApiError } from "@/server/lib/errors";
 import { getClusterConnection, type SolanaCluster } from "@/server/solana/connection";
+import { env } from "@/server/lib/env";
 import devnetTestMints from "../../../config/devnet-test-mints.json";
 
 const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
@@ -116,6 +117,19 @@ function toPrice(token: JupiterToken | undefined) {
   return typeof price === "number" && Number.isFinite(price) ? price : null;
 }
 
+// Jupiter's token search has never heard of the throwaway devnet test mints in
+// DEVNET_WRAPPED_BTC (they're not real, tradeable tokens), so it returns no price for them —
+// leaving `price: null` and, on `/market`, a permanently-disabled "Enter a coverage amount"
+// button (price > 0 is one of `canBuy`'s conditions). In demo mode only, fall back to a fixed
+// price matching the strike prices seeded in `server/demo/fixtures.ts` so Protect is usable.
+const DEMO_FALLBACK_PRICE: Record<string, number> = { SOL: 140, cbBTC: 60000, WBTC: 60000 };
+
+function withDemoPriceFallback(asset: WalletAsset): WalletAsset {
+  if (!env.demoMode || asset.price != null) return asset;
+  const fallback = DEMO_FALLBACK_PRICE[asset.symbol];
+  return fallback ? { ...asset, price: fallback } : asset;
+}
+
 async function fetchJupiterToken(mint: string): Promise<JupiterToken | undefined> {
   try {
     const response = await fetch(
@@ -213,7 +227,7 @@ export async function listWalletAssets(
   const metadata = await fetchJupiterTokens(lookupMints);
 
   const solMeta = metadata.get(NATIVE_SOL_MINT);
-  const sol: WalletAsset = {
+  const sol: WalletAsset = withDemoPriceFallback({
     id: NATIVE_SOL_MINT,
     mint: NATIVE_SOL_MINT,
     symbol: "SOL",
@@ -223,11 +237,11 @@ export async function listWalletAssets(
     price: toPrice(solMeta),
     change24h: toChange(solMeta),
     supported: true,
-  };
+  });
 
   const btcAssets: WalletAsset[] = wrappedBtc.map((item) => {
     const meta = metadata.get(item.mint);
-    return {
+    return withDemoPriceFallback({
       id: item.mint,
       mint: item.mint,
       symbol: meta?.symbol?.trim() || item.symbol,
@@ -237,7 +251,7 @@ export async function listWalletAssets(
       price: toPrice(meta),
       change24h: toChange(meta),
       supported: true,
-    };
+    });
   });
 
   const otherAssets: WalletAsset[] = [];
