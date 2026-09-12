@@ -16,6 +16,8 @@ import type { Position } from "@/server/types/position";
  */
 
 type DemoMarket = Market & { b: number; feeBps: number };
+type DemoPoolState = { qDown: number; qUp: number; poolDown: bigint; poolUp: bigint; lpSupply: bigint };
+type DemoPositionState = { down: bigint; up: bigint; lp: bigint };
 
 function freshAddress(): string {
   return Keypair.generate().publicKey.toBase58();
@@ -23,10 +25,41 @@ function freshAddress(): string {
 
 const now = Math.floor(Date.now() / 1000);
 
-const demoMarkets = new Map<string, DemoMarket>();
-const demoPoolState = new Map<string, { qDown: number; qUp: number; poolDown: bigint; poolUp: bigint; lpSupply: bigint }>();
+/**
+ * `next dev`'s Fast Refresh re-evaluates this module on every save anywhere in the dependency
+ * graph — a plain module-level `new Map()` would get thrown away and reseeded with brand new
+ * random addresses each time, silently invalidating whatever market/pool addresses a
+ * already-loaded browser tab is holding (its next `/pool` or tx-build call 404s against the new
+ * map). Stashing the state on `globalThis` keyed by a fixed symbol survives module
+ * re-evaluation within the same server process — a real restart still resets it, which is fine.
+ */
+const DEMO_STATE_KEY = Symbol.for("sentinels.demoFixtures");
+
+type DemoState = {
+  markets: Map<string, DemoMarket>;
+  pools: Map<string, DemoPoolState>;
+  positions: Map<string, DemoPositionState>;
+  resolvedSolMarket: string;
+  seeded: boolean;
+};
+
+const globalForDemo = globalThis as unknown as { [DEMO_STATE_KEY]?: DemoState };
+
+function initState(): DemoState {
+  return {
+    markets: new Map(),
+    pools: new Map(),
+    positions: new Map(),
+    resolvedSolMarket: "",
+    seeded: false,
+  };
+}
+
+const state = (globalForDemo[DEMO_STATE_KEY] ??= initState());
+const demoMarkets = state.markets;
+const demoPoolState = state.pools;
 // key: `${wallet}|${marketAddress}`
-const demoPositions = new Map<string, { down: bigint; up: bigint; lp: bigint }>();
+const demoPositions = state.positions;
 
 function seedMarket(params: {
   assetSymbol: Market["assetSymbol"];
@@ -78,32 +111,39 @@ const ASSET_STRIKES: Record<"BTC" | "ETH" | "SOL", string> = {
   SOL: "140000000", // $140.00
 };
 
-for (const assetSymbol of ["BTC", "ETH", "SOL"] as const) {
-  for (const days of TENORS_DAYS) {
-    seedMarket({
-      assetSymbol,
-      strikePrice: ASSET_STRIKES[assetSymbol],
-      expiryTs: now + days * DAY,
-      status: "active",
-      outcome: "unresolved",
-      resolvedPrice: null,
-      resolvedAt: null,
-    });
+// Guarded by `state.seeded` (not just top-level execution) — see the Fast Refresh comment
+// above: without the guard, a `globalThis`-cached `state` still gets a second seedMarket pass
+// appended on top of the first every time this module re-evaluates, duplicating markets.
+if (!state.seeded) {
+  for (const assetSymbol of ["BTC", "ETH", "SOL"] as const) {
+    for (const days of TENORS_DAYS) {
+      seedMarket({
+        assetSymbol,
+        strikePrice: ASSET_STRIKES[assetSymbol],
+        expiryTs: now + days * DAY,
+        status: "active",
+        outcome: "unresolved",
+        resolvedPrice: null,
+        resolvedAt: null,
+      });
+    }
   }
-}
 
-// A separate, already-resolved market to demo Redeem. `/market`'s Protect view only fetches
-// `status=active` markets (see fetchMarkets({ status: "active" }) in page.tsx), so this never
-// shows up as a 4th tenor there — but it's unfiltered on the positions/redeem list.
-const resolvedSolMarket = seedMarket({
-  assetSymbol: "SOL",
-  strikePrice: ASSET_STRIKES.SOL,
-  expiryTs: now - 60 * 30,
-  status: "resolved",
-  outcome: "down",
-  resolvedPrice: "128500000",
-  resolvedAt: now - 60 * 5,
-});
+  // A separate, already-resolved market to demo Redeem. `/market`'s Protect view only fetches
+  // `status=active` markets (see fetchMarkets({ status: "active" }) in page.tsx), so this never
+  // shows up as a 4th tenor there — but it's unfiltered on the positions/redeem list.
+  state.resolvedSolMarket = seedMarket({
+    assetSymbol: "SOL",
+    strikePrice: ASSET_STRIKES.SOL,
+    expiryTs: now - 60 * 30,
+    status: "resolved",
+    outcome: "down",
+    resolvedPrice: "128500000",
+    resolvedAt: now - 60 * 5,
+  });
+  state.seeded = true;
+}
+const resolvedSolMarket = state.resolvedSolMarket;
 // Give every wallet a starting DOWN balance on the resolved market so Redeem has something to
 // show on first load, without needing a Protect pass first.
 const DEFAULT_RESOLVED_DOWN_BALANCE = 25_000_000n; // 25 USDC, 6dp
