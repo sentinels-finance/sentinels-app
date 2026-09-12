@@ -75,6 +75,11 @@ module.exports = {
           from: { opacity: "0" },
           to: { opacity: "1" },
         },
+        "check-pop": {
+          "0%": { opacity: "0", transform: "scale(0.4)" },
+          "60%": { opacity: "1", transform: "scale(1.08)" },
+          "100%": { opacity: "1", transform: "scale(1)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -83,6 +88,7 @@ module.exports = {
         // flashing in first.
         "rise-in": "rise-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both",
         "fade-in": "fade-in 1.2s ease-out both",
+        "check-pop": "check-pop 0.5s cubic-bezier(0.22, 1, 0.36, 1) both",
       },
     },
   },

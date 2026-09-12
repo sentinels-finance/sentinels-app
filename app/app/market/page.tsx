@@ -10,6 +10,7 @@ import { FilterDropdown } from "@/components/molecules/filter-dropdown";
 import { StatusPill } from "@/components/molecules/status-pill";
 import { AppShell } from "@/components/organisms/app-shell";
 import { ConfirmTransactionModal } from "@/components/organisms/confirm-transaction-modal";
+import { RedeemSuccessModal, type RedeemSuccessDetails } from "@/components/organisms/redeem-success-modal";
 import { Button as UiButton } from "@/components/ui/button";
 import {
   Select,
@@ -866,17 +867,34 @@ function PositionsPanel({
   const { address } = useAppKitAccount();
   const sendTx = useSendUnsignedTx();
   const [redeemingMarket, setRedeemingMarket] = useState<string | null>(null);
+  const [redeemError, setRedeemError] = useState<string | null>(null);
+  const [successDetails, setSuccessDetails] = useState<RedeemSuccessDetails | null>(null);
 
   const active = positions.filter(
     (position) => Number(position.downBalance) > 0 && position.marketStatus !== "resolved",
   );
   const rows = active.filter((row) => token === "all" || row.assetSymbol === token);
 
+  // Separate from `active` (which deliberately excludes resolved markets) — this is what
+  // still has a payout to claim: resolved, and the wallet holds a non-zero balance of the
+  // winning side.
+  const redeemable = positions.filter((position) => {
+    if (position.marketStatus !== "resolved") return false;
+    const winningBalance = position.marketOutcome === "up" ? position.upBalance : position.downBalance;
+    return Number(winningBalance) > 0;
+  });
+
+  function truncateSignature(signature: string): string {
+    if (signature.length <= 16) return signature;
+    return `${signature.slice(0, 8)}…${signature.slice(-8)}`;
+  }
+
   async function handleRedeem(position: Position) {
     if (!address) return;
     const winningBalance = position.marketOutcome === "up" ? position.upBalance : position.downBalance;
     if (!(Number(winningBalance) > 0)) return;
     setRedeemingMarket(position.market);
+    setRedeemError(null);
     try {
       const owner = parseWalletAddress(address);
       const base64 = await buildRedeemTx({
@@ -884,10 +902,18 @@ function PositionsPanel({
         amount: winningBalance,
         wallet: owner,
       });
-      await sendTx(base64);
+      const signature = await sendTx(base64);
+      const market = marketByAddress.get(position.market);
+      setSuccessDetails({
+        assetSymbol: position.assetSymbol,
+        payout: `$${formatUsd(fromBaseUnits(winningBalance))} USDC`,
+        strike: market ? formatStrike(market.strikePrice) : "-",
+        settledPrice: position.resolvedPrice ? formatStrike(position.resolvedPrice) : "-",
+        signature: truncateSignature(signature),
+      });
       onRedeemed();
-    } catch {
-      // surfaced implicitly via unchanged balances; the row stays actionable to retry
+    } catch (error) {
+      setRedeemError(error instanceof Error ? error.message : "Redeem failed. Try again.");
     } finally {
       setRedeemingMarket(null);
     }
@@ -958,20 +984,56 @@ function PositionsPanel({
           }
         />
       )}
-      {rows
-        .filter((position) => position.marketStatus === "resolved")
-        .map((position) => (
-          <UiButton
-            key={`redeem-${position.market}`}
-            type="button"
-            variant="dark"
-            size="small"
-            disabled={redeemingMarket === position.market}
-            onClick={() => handleRedeem(position)}
-          >
-            {redeemingMarket === position.market ? "Redeeming…" : `Redeem ${position.assetSymbol}`}
-          </UiButton>
-        ))}
+      {redeemable.length > 0 ? (
+        <div className="flex w-full flex-col gap-3 rounded-[10px] bg-neutrals-2 px-6 py-5">
+          <p className="m-0 font-display text-sm font-bold leading-5 text-neutrals-8">
+            Ready to redeem
+          </p>
+          <div className="flex flex-col gap-2">
+            {redeemable.map((position) => {
+              const winningBalance =
+                position.marketOutcome === "up" ? position.upBalance : position.downBalance;
+              return (
+                <div
+                  key={`redeem-${position.market}`}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-[8px] bg-neutrals-1 px-4 py-3"
+                >
+                  <div className="flex items-center gap-2">
+                    <TokenIcon symbol={position.assetSymbol} src={iconFor(position.assetSymbol)} size="md" />
+                    <div className="flex flex-col">
+                      <span className="font-body text-sm font-medium leading-5 text-neutrals-8">
+                        {nameFor(position.assetSymbol)} coverage settled
+                      </span>
+                      <span className="font-body text-caption-2 text-neutrals-5">
+                        Payout: ${formatUsd(fromBaseUnits(winningBalance))} USDC
+                      </span>
+                    </div>
+                  </div>
+                  <UiButton
+                    type="button"
+                    variant="dark"
+                    size="small"
+                    disabled={redeemingMarket === position.market}
+                    onClick={() => handleRedeem(position)}
+                  >
+                    {redeemingMarket === position.market ? "Redeeming…" : `Redeem ${position.assetSymbol}`}
+                  </UiButton>
+                </div>
+              );
+            })}
+          </div>
+          {redeemError ? (
+            <p className="m-0 font-body text-caption-2 text-primary-3" role="alert">
+              {redeemError}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+      <RedeemSuccessModal
+        open={successDetails !== null}
+        details={successDetails}
+        onClose={() => setSuccessDetails(null)}
+      />
     </div>
   );
 }
