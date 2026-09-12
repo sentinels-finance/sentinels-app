@@ -105,10 +105,12 @@ function seedMarket(params: {
 const DAY = 60 * 60 * 24;
 const TENORS_DAYS = [3, 14, 30] as const;
 
+// strikePrice/resolvedPrice are at Pyth's 8dp exponent (see PYTH_PRICE_DECIMALS in
+// app/app/market/page.tsx) — whole-dollar price * 1e8, not USDC's 6dp.
 const ASSET_STRIKES: Record<"BTC" | "ETH" | "SOL", string> = {
-  BTC: "60000000000", // $60,000.00 (8dp, matches Pyth BTC/USD exponent)
-  ETH: "3200000000", // $3,200.00
-  SOL: "140000000", // $140.00
+  BTC: "6000000000000", // $60,000.00
+  ETH: "320000000000", // $3,200.00
+  SOL: "14000000000", // $140.00
 };
 
 // Guarded by `state.seeded` (not just top-level execution) — see the Fast Refresh comment
@@ -138,7 +140,7 @@ if (!state.seeded) {
     expiryTs: now - 60 * 30,
     status: "resolved",
     outcome: "down",
-    resolvedPrice: "128500000",
+    resolvedPrice: "12850000000", // $128.50 — below the $140 strike, hence outcome: "down"
     resolvedAt: now - 60 * 5,
   });
   state.seeded = true;
