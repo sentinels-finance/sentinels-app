@@ -6,6 +6,8 @@ import { getAmmProgram } from "@/server/solana/anchor-client";
 import { listMarkets, getMarket } from "@/server/services/market-service";
 import { PROGRAM_IDS } from "@/server/solana/programs";
 import { NotFoundError } from "@/server/lib/errors";
+import { env } from "@/server/lib/env";
+import { listDemoPositions, getDemoPosition } from "@/server/demo/fixtures";
 import type { Market } from "@/server/types/market";
 import type { Position } from "@/server/types/position";
 
@@ -62,26 +64,33 @@ async function positionForMarket(market: Market, wallet: PublicKey): Promise<Pos
   };
 }
 
-export async function listPositions(walletAddress: string): Promise<Position[]> {
-  let wallet: PublicKey;
+function assertValidWallet(walletAddress: string): void {
   try {
-    wallet = new PublicKey(walletAddress);
+    // eslint-disable-next-line no-new
+    new PublicKey(walletAddress);
   } catch {
     throw new NotFoundError(`Invalid wallet address: ${walletAddress}`);
   }
+}
 
+export async function listPositions(walletAddress: string): Promise<Position[]> {
+  assertValidWallet(walletAddress);
+  if (env.demoMode) return listDemoPositions(walletAddress);
+
+  const wallet = new PublicKey(walletAddress);
   const markets = await listMarkets();
   return Promise.all(markets.map((market) => positionForMarket(market, wallet)));
 }
 
 export async function getPosition(walletAddress: string, marketAddress: string): Promise<Position> {
-  let wallet: PublicKey;
-  try {
-    wallet = new PublicKey(walletAddress);
-  } catch {
-    throw new NotFoundError(`Invalid wallet address: ${walletAddress}`);
+  assertValidWallet(walletAddress);
+  if (env.demoMode) {
+    const position = getDemoPosition(walletAddress, marketAddress);
+    if (!position) throw new NotFoundError(`No market at address ${marketAddress}`);
+    return position;
   }
 
+  const wallet = new PublicKey(walletAddress);
   const market = await getMarket(marketAddress); // throws NotFoundError if it doesn't exist
   return positionForMarket(market, wallet);
 }
