@@ -66,28 +66,38 @@ function seedMarket(params: {
   return address;
 }
 
-// Two live markets to Protect against, one already resolved to demo Redeem.
-seedMarket({
-  assetSymbol: "BTC",
-  strikePrice: "60000000000",
-  expiryTs: now + 60 * 60 * 6,
-  status: "active",
-  outcome: "unresolved",
-  resolvedPrice: null,
-  resolvedAt: null,
-});
-seedMarket({
-  assetSymbol: "ETH",
-  strikePrice: "3200000000",
-  expiryTs: now + 60 * 60 * 3,
-  status: "active",
-  outcome: "unresolved",
-  resolvedPrice: null,
-  resolvedAt: null,
-});
+// Three tenors per asset (`/market`'s expiry slider groups markets by assetSymbol and sorts by
+// expiryTs, so this is what makes 3d/14d/30d show up as slider stops) — see
+// `app/app/market/page.tsx`'s `marketsForAsset`.
+const DAY = 60 * 60 * 24;
+const TENORS_DAYS = [3, 14, 30] as const;
+
+const ASSET_STRIKES: Record<"BTC" | "ETH" | "SOL", string> = {
+  BTC: "60000000000", // $60,000.00 (8dp, matches Pyth BTC/USD exponent)
+  ETH: "3200000000", // $3,200.00
+  SOL: "140000000", // $140.00
+};
+
+for (const assetSymbol of ["BTC", "ETH", "SOL"] as const) {
+  for (const days of TENORS_DAYS) {
+    seedMarket({
+      assetSymbol,
+      strikePrice: ASSET_STRIKES[assetSymbol],
+      expiryTs: now + days * DAY,
+      status: "active",
+      outcome: "unresolved",
+      resolvedPrice: null,
+      resolvedAt: null,
+    });
+  }
+}
+
+// A separate, already-resolved market to demo Redeem. `/market`'s Protect view only fetches
+// `status=active` markets (see fetchMarkets({ status: "active" }) in page.tsx), so this never
+// shows up as a 4th tenor there — but it's unfiltered on the positions/redeem list.
 const resolvedSolMarket = seedMarket({
   assetSymbol: "SOL",
-  strikePrice: "140000000",
+  strikePrice: ASSET_STRIKES.SOL,
   expiryTs: now - 60 * 30,
   status: "resolved",
   outcome: "down",
