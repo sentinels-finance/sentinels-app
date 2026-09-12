@@ -7,6 +7,7 @@ import {
 } from "@/lib/wallet/assets";
 import { ApiError } from "@/server/lib/errors";
 import { getClusterConnection, type SolanaCluster } from "@/server/solana/connection";
+import devnetTestMints from "../../../config/devnet-test-mints.json";
 
 const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 const TOKEN_2022_PROGRAM_ID = new PublicKey("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
@@ -15,38 +16,56 @@ const NATIVE_SOL_MINT = "So11111111111111111111111111111111111111112";
 const SOL_ICON =
   "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png";
 
-const WRAPPED_BTC: {
-  mint: string;
-  symbol: string;
-  name: string;
-  icon: string;
-}[] = [
-  {
-    mint: "cbbtcf3aa214zXHbiAZQwf4122FBYbraNdFqgw4iMij",
-    symbol: "cbBTC",
-    name: "Coinbase Wrapped BTC",
-    icon: "https://coin-images.coingecko.com/coins/images/40143/small/cbbtc.webp",
-  },
-  {
-    mint: "3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh",
-    symbol: "WBTC",
-    name: "Wrapped BTC (Wormhole)",
-    icon: "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh/logo.png",
-  },
-  {
-    mint: "5XZw2LKTyrfvfiskJ78AMpackRjPcyCif1WhUsPDuVqQ",
-    symbol: "WBTC",
-    name: "Wrapped BTC",
-    icon: "https://j73gp4w27ucraqtyzsqa5th4fwldfvqgq576cnceekfactgk4fla.arweave.net/T_Zn8tr9BRBCeMygDsz8LZYy1gaHf-E0RCKKAUzK4VY",
-  },
+type WrappedBtcEntry = { mint: string; symbol: string; name: string; icon: string };
+
+const WRAPPED_BTC_ICON = {
+  cbBTC: "https://coin-images.coingecko.com/coins/images/40143/small/cbbtc.webp",
+  WBTC: "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh/logo.png",
+};
+
+// Mainnet-only wrapped BTC mints — real, well-known addresses.
+const MAINNET_WRAPPED_BTC: WrappedBtcEntry[] = [
+  { mint: "cbbtcf3aa214zXHbiAZQwf4122FBYbraNdFqgw4iMij", symbol: "cbBTC", name: "Coinbase Wrapped BTC", icon: WRAPPED_BTC_ICON.cbBTC },
+  { mint: "3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh", symbol: "WBTC", name: "Wrapped BTC (Wormhole)", icon: WRAPPED_BTC_ICON.WBTC },
+  { mint: "5XZw2LKTyrfvfiskJ78AMpackRjPcyCif1WhUsPDuVqQ", symbol: "WBTC", name: "Wrapped BTC", icon: WRAPPED_BTC_ICON.WBTC },
 ];
 
-const WRAPPED_BTC_MINTS = new Set(WRAPPED_BTC.map((item) => item.mint));
+/**
+ * A flat placeholder badge — deliberately NOT the real Coinbase/Wormhole logos below, so a
+ * devnet test mint never borrows a real brand's icon. `letter` is the token's own initial;
+ * `hex` gives each test token a distinct color so they stay visually distinguishable from
+ * each other, not just from the real thing.
+ */
+function testTokenIcon(letter: string, hex: string): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="16" cy="16" r="15" fill="${hex}" stroke="#ffffff" stroke-width="1.5" stroke-dasharray="3 2"/><text x="16" y="21" font-family="monospace" font-size="14" font-weight="bold" fill="#ffffff" text-anchor="middle">${letter}</text></svg>`;
+  return `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
+}
 
-const USDC_MINTS = new Set([
+// Devnet has no real wBTC/cbBTC — these are throwaway test mints created by
+// scripts/create-devnet-test-tokens.ts (config/devnet-test-mints.json), so devnet wallets
+// have something real to hold and this page can display a non-zero balance while testing.
+// Icons are generic dashed badges, not the real Coinbase/Wormhole logos — reusing those for a
+// fake token would misrepresent it as the genuine, brand-affiliated asset.
+const DEVNET_WRAPPED_BTC: WrappedBtcEntry[] = [
+  { mint: devnetTestMints.cbbtc, symbol: "cbBTC", name: "Coinbase Wrapped BTC (devnet test token)", icon: testTokenIcon("C", "#7c3aed") },
+  { mint: devnetTestMints.wbtc, symbol: "WBTC", name: "Wrapped BTC (devnet test token)", icon: testTokenIcon("W", "#0891b2") },
+];
+
+const MAINNET_USDC_MINTS = new Set([
   "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
   "4zMMC9sst3DuUeA5e2mWkxYxbJdxfn1M9BxBSWapWdoX",
 ]);
+
+// Same rationale as DEVNET_WRAPPED_BTC — devnet's test USDC mint, not the real one.
+const DEVNET_USDC_MINTS = new Set([devnetTestMints.usdc]);
+
+function wrappedBtcFor(cluster: SolanaCluster): WrappedBtcEntry[] {
+  return cluster === "devnet" ? DEVNET_WRAPPED_BTC : MAINNET_WRAPPED_BTC;
+}
+
+function usdcMintsFor(cluster: SolanaCluster): Set<string> {
+  return cluster === "devnet" ? DEVNET_USDC_MINTS : MAINNET_USDC_MINTS;
+}
 
 type JupiterToken = {
   id: string;
@@ -71,8 +90,8 @@ function parseOwner(raw: string) {
   }
 }
 
-function isUsdc(mint: string, symbol: string) {
-  if (USDC_MINTS.has(mint)) return true;
+function isUsdc(mint: string, symbol: string, usdcMints: Set<string>) {
+  if (usdcMints.has(mint)) return true;
   return symbol.toUpperCase() === "USDC";
 }
 
@@ -156,6 +175,9 @@ export async function listWalletAssets(
 ): Promise<WalletAssetsResponse> {
   const owner = parseOwner(parseWalletAddress(ownerRaw));
   const connection = getClusterConnection(cluster);
+  const wrappedBtc = wrappedBtcFor(cluster);
+  const wrappedBtcMints = new Set(wrappedBtc.map((item) => item.mint));
+  const usdcMints = usdcMintsFor(cluster);
 
   const [lamports, held] = await Promise.all([
     connection.getBalance(owner).catch(() => 0),
@@ -168,15 +190,15 @@ export async function listWalletAssets(
   }
 
   let usdcBalance = held
-    .filter((item) => USDC_MINTS.has(item.mint))
+    .filter((item) => usdcMints.has(item.mint))
     .reduce((sum, item) => sum + item.balance, 0);
 
   const rest = held
     .filter(
       (item) =>
         item.mint !== NATIVE_SOL_MINT &&
-        !USDC_MINTS.has(item.mint) &&
-        !WRAPPED_BTC_MINTS.has(item.mint) &&
+        !usdcMints.has(item.mint) &&
+        !wrappedBtcMints.has(item.mint) &&
         item.decimals > 0 &&
         item.balance > 0,
     )
@@ -185,7 +207,7 @@ export async function listWalletAssets(
 
   const lookupMints = [
     NATIVE_SOL_MINT,
-    ...WRAPPED_BTC.map((item) => item.mint),
+    ...wrappedBtc.map((item) => item.mint),
     ...rest.map((item) => item.mint),
   ];
   const metadata = await fetchJupiterTokens(lookupMints);
@@ -203,7 +225,7 @@ export async function listWalletAssets(
     supported: true,
   };
 
-  const btcAssets: WalletAsset[] = WRAPPED_BTC.map((item) => {
+  const btcAssets: WalletAsset[] = wrappedBtc.map((item) => {
     const meta = metadata.get(item.mint);
     return {
       id: item.mint,
@@ -223,8 +245,8 @@ export async function listWalletAssets(
     const meta = metadata.get(token.mint);
     const symbol = meta?.symbol?.trim() || token.mint.slice(0, 4);
     const name = meta?.name?.trim() || symbol;
-    if (isUsdc(token.mint, symbol)) {
-      if (!USDC_MINTS.has(token.mint)) {
+    if (isUsdc(token.mint, symbol, usdcMints)) {
+      if (!usdcMints.has(token.mint)) {
         usdcBalance += token.balance;
       }
       continue;

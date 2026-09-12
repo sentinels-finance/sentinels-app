@@ -5,7 +5,11 @@
 // Same script works against localnet AND devnet — target cluster comes from the standard
 // Anchor env vars, not a flag:
 //   ANCHOR_PROVIDER_URL=http://127.0.0.1:8899 ANCHOR_WALLET=~/.config/solana/id.json \
-//     npx ts-node scripts/seed-market.ts [--asset BTC|ETH|SOL] [--usdc-mint <address>]
+//     npx ts-node scripts/seed-market.ts [--asset BTC|ETH|SOL] [--usdc-mint <address>] [--weeks <n>]
+//
+// --weeks (default 1) picks the n-th upcoming Friday 00:00 UTC as expiry_ts, so a longer-dated
+// market can be seeded alongside the default one without a PDA collision (expiry_ts is part of
+// the Market PDA's seeds) — e.g. --weeks 4 for a market expiring 4 Fridays from now.
 //
 // Not part of `anchor test` / CI — this is a manual dev/demo-data tool, run by hand. Never
 // targets mainnet (nothing here checks for it — don't point ANCHOR_PROVIDER_URL there).
@@ -37,11 +41,11 @@ const DEMO_STRIKE_PRICE: Record<AssetSymbol, number> = {
  * expiry_ts, and therefore a different market PDA, every time the script runs — breaking the
  * idempotency this script otherwise relies on).
  */
-function nextFridayMidnightUtc(): number {
+function nextFridayMidnightUtc(weeksOut = 1): number {
   const now = new Date();
   const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   const daysUntilFriday = (5 - d.getUTCDay() + 7) % 7 || 7; // Friday = 5; today doesn't count
-  d.setUTCDate(d.getUTCDate() + daysUntilFriday);
+  d.setUTCDate(d.getUTCDate() + daysUntilFriday + (weeksOut - 1) * 7);
   return Math.floor(d.getTime() / 1000);
 }
 
@@ -55,11 +59,16 @@ function parseArgs() {
   if (!(asset in DEMO_STRIKE_PRICE)) {
     throw new Error(`--asset must be one of BTC, ETH, SOL (got "${asset}")`);
   }
-  return { asset, usdcMintArg: get("--usdc-mint") };
+  const weeksArg = get("--weeks");
+  const weeksOut = weeksArg ? Number(weeksArg) : 1;
+  if (!Number.isInteger(weeksOut) || weeksOut < 1) {
+    throw new Error(`--weeks must be a positive integer (got "${weeksArg}")`);
+  }
+  return { asset, usdcMintArg: get("--usdc-mint"), weeksOut };
 }
 
 async function main() {
-  const { asset, usdcMintArg } = parseArgs();
+  const { asset, usdcMintArg, weeksOut } = parseArgs();
 
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
@@ -72,6 +81,7 @@ async function main() {
   console.log(`Cluster:  ${provider.connection.rpcEndpoint}`);
   console.log(`Admin:    ${admin.publicKey.toBase58()}`);
   console.log(`Asset:    ${asset}`);
+  console.log(`Weeks:    ${weeksOut} (expiry = ${new Date(nextFridayMidnightUtc(weeksOut) * 1000).toISOString()})`);
 
   const feedKey = `${asset}/USD` as keyof typeof feeds.feeds;
   const feedHex = feeds.feeds[feedKey].feed_id.replace(/^0x/, "");
@@ -138,7 +148,7 @@ async function main() {
 
   // --- 4. Market (idempotent) ---
   const strikePrice = new anchor.BN(DEMO_STRIKE_PRICE[asset]);
-  const expiryTs = new anchor.BN(nextFridayMidnightUtc());
+  const expiryTs = new anchor.BN(nextFridayMidnightUtc(weeksOut));
 
   const [marketPda] = PublicKey.findProgramAddressSync(
     [

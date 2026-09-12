@@ -9,17 +9,16 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => {
       throw new BadRequestError("Request body must be JSON");
     });
-    const { market, downAmount, upAmount, wallet } = body as Record<string, unknown>;
+    const { market, usdcAmount, wallet } = body as Record<string, unknown>;
     if (
       typeof market !== "string" ||
-      typeof downAmount !== "string" ||
-      typeof upAmount !== "string" ||
+      typeof usdcAmount !== "string" ||
       typeof wallet !== "string"
     ) {
-      throw new BadRequestError("Expected { market, downAmount, upAmount, wallet } as strings");
+      throw new BadRequestError("Expected { market, usdcAmount, wallet } as strings");
     }
 
-    const transaction = await buildAddLiquidityTx(market, downAmount, upAmount, wallet);
+    const transaction = await buildAddLiquidityTx(market, usdcAmount, wallet);
     return NextResponse.json({ transaction });
   } catch (error) {
     const { status, body } = toErrorResponse(error);

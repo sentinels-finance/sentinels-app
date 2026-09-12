@@ -270,15 +270,22 @@ async function getPoolContext(marketPubkey: PublicKey) {
   return { ammPoolPda, pool, ammProgram };
 }
 
+/**
+ * `add_liquidity` needs equal DOWN+UP already sitting in the caller's accounts (per
+ * docs/libs/API.md: "mint a complete set first if you only have USDC") and its
+ * `user_down_account`/`user_up_account` are plain `mut`, not `init_if_needed` — so a wallet
+ * that has only ever held USDC has neither the tokens nor the ATAs yet. Same shape as
+ * `buildProtectTx`: bundle `mint_complete_set(usdcAmount)` (USDC -> equal DOWN+UP, and it does
+ * create those ATAs) with `add_liquidity(usdcAmount, usdcAmount)` in one transaction, so LPs
+ * only ever need to hold USDC.
+ */
 export async function buildAddLiquidityTx(
   marketAddress: string,
-  downAmount: string,
-  upAmount: string,
+  usdcAmount: string,
   wallet: string,
 ): Promise<string> {
   const userPubkey = parseWallet(wallet);
-  const downAmountBN = parseAmount(downAmount);
-  const upAmountBN = parseAmount(upAmount);
+  const amountBN = parseAmount(usdcAmount);
   const ctx = await resolveMarketContext(marketAddress);
   const { ammPoolPda, pool, ammProgram } = await getPoolContext(ctx.marketPubkey);
 
@@ -287,8 +294,9 @@ export async function buildAddLiquidityTx(
   const lpMint = pool.lpMint as PublicKey;
   const userLpAccount = getAssociatedTokenAddressSync(lpMint, userPubkey);
 
-  const ix = await ammProgram.methods
-    .addLiquidity(downAmountBN, upAmountBN)
+  const mintIx = await mintCompleteSetIx(ctx, userPubkey, amountBN);
+  const addLiquidityIx = await ammProgram.methods
+    .addLiquidity(amountBN, amountBN)
     .accounts({
       user: userPubkey,
       market: ctx.marketPubkey,
@@ -307,7 +315,7 @@ export async function buildAddLiquidityTx(
     })
     .instruction();
 
-  return buildUnsignedTransaction(userPubkey, [ix]);
+  return buildUnsignedTransaction(userPubkey, [mintIx, addLiquidityIx]);
 }
 
 export async function buildRemoveLiquidityTx(

@@ -12,7 +12,10 @@ type TokenIconProps = {
 
 export function TokenIcon({ src, symbol, size = "sm", className }: TokenIconProps) {
   const [failed, setFailed] = useState(false);
-  const proxied = src ? `/api/token-icon?src=${encodeURIComponent(src)}` : null;
+  // A data: URI (e.g. the generated devnet-test-token badges) is already inline — routing it
+  // through the same-origin image proxy would just have that proxy reject it (it only allows
+  // http(s) sources) and lose the icon to the fallback letter avatar.
+  const proxied = src ? (src.startsWith("data:") ? src : `/api/token-icon?src=${encodeURIComponent(src)}`) : null;
   const box = size === "md" ? "size-9" : "size-6";
 
   if (!proxied || failed) {

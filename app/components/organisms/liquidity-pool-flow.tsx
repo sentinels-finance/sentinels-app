@@ -23,8 +23,13 @@ import {
   parseWalletAddress,
   type SolanaCluster,
 } from "@/lib/wallet/assets";
+import { fetchMarkets, type Market } from "@/lib/api/markets";
+import { fetchPool, type Pool } from "@/lib/api/pool";
+import { fetchPositions, type Position } from "@/lib/api/positions";
+import { buildAddLiquidityTx, buildRemoveLiquidityTx } from "@/lib/api/tx";
+import { useSendUnsignedTx } from "@/lib/wallet/send-transaction";
 import { cn } from "@/lib/utils";
-import { APP_ASSETS, TOKEN_FILTER_OPTIONS, TOKEN_ICONS } from "@/lib/wallet/token-icons";
+import { TOKEN_FILTER_OPTIONS, TOKEN_ICONS } from "@/lib/wallet/token-icons";
 
 type LiquidityTab = "add" | "remove" | "position";
 
@@ -32,6 +37,12 @@ type LiquidityQuote = {
   action: string;
   rows: { label: string; value: string; valueClassName?: string }[];
   note: string;
+  onConfirm: () => Promise<void>;
+};
+
+type MarketPool = {
+  market: Market;
+  pool: Pool;
 };
 
 const TABS: { id: LiquidityTab; label: string }[] = [
@@ -46,61 +57,7 @@ const PAGE_COPY = {
     "Underwrite the AMM pool and earn a share of trading fees for taking on UP-side risk. Add or withdraw at any time before expiry.",
 } as const;
 
-const [SOL, CBBTC, WBTC] = APP_ASSETS;
-
-const POOLS = [
-  {
-    id: SOL.symbol,
-    ...SOL,
-    tvl: 482940,
-    apr: 18.4,
-    utilization: 62,
-    lpSymbol: "sLP-SOL",
-  },
-  {
-    id: CBBTC.symbol,
-    ...CBBTC,
-    tvl: 1082110,
-    apr: 12.1,
-    utilization: 48,
-    lpSymbol: "sLP-cbBTC",
-  },
-  {
-    id: WBTC.symbol,
-    ...WBTC,
-    tvl: 583270,
-    apr: 15.7,
-    utilization: 55,
-    lpSymbol: "sLP-WBTC",
-  },
-] as const;
-
-const MY_POSITIONS = [
-  {
-    id: SOL.symbol,
-    ...SOL,
-    deposited: 500,
-    fees: 21.3,
-    lp: 500,
-    share: "3.2%",
-  },
-  {
-    id: CBBTC.symbol,
-    ...CBBTC,
-    deposited: 1200,
-    fees: 48.6,
-    lp: 1200,
-    share: "1.8%",
-  },
-  {
-    id: WBTC.symbol,
-    ...WBTC,
-    deposited: 350,
-    fees: 11.4,
-    lp: 350,
-    share: "2.1%",
-  },
-] as const;
+const USDC_DECIMALS = 6;
 
 function parseTab(value: string | null): LiquidityTab {
   if (value === "remove" || value === "position" || value === "add") {
@@ -142,6 +99,78 @@ function clusterFromNetwork(networkId: string | undefined): SolanaCluster {
   return "mainnet";
 }
 
+function fromBaseUnits(raw: string, decimals = USDC_DECIMALS): number {
+  const value = Number(raw);
+  if (!Number.isFinite(value)) return 0;
+  return value / 10 ** decimals;
+}
+
+function toBaseUnits(uiAmount: number, decimals = USDC_DECIMALS): string {
+  return Math.max(0, Math.round(uiAmount * 10 ** decimals)).toString();
+}
+
+function nameFor(symbol: string): string {
+  if (symbol === "SOL") return "Solana";
+  if (symbol === "BTC") return "Bitcoin";
+  if (symbol === "ETH") return "Ethereum";
+  return symbol;
+}
+
+function iconFor(symbol: string): string | null {
+  return TOKEN_ICONS[symbol] ?? null;
+}
+
+function tvlOf(pool: Pool): number {
+  return fromBaseUnits(pool.poolDownBalance) + fromBaseUnits(pool.poolUpBalance);
+}
+
+function utilizationOf(pool: Pool): number {
+  const qDown = Number(pool.qDown);
+  const qUp = Number(pool.qUp);
+  const total = Math.abs(qDown) + Math.abs(qUp);
+  if (total === 0) return 0;
+  return Math.round((Math.abs(qDown) / total) * 100);
+}
+
+function useMarketPools(refreshKey: number) {
+  const [pools, setPools] = useState<MarketPool[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    fetchMarkets({ status: "active" })
+      .then(async (markets) => {
+        const settled = await Promise.all(
+          markets.map(async (market) => {
+            try {
+              const pool = await fetchPool(market.address);
+              return { market, pool };
+            } catch {
+              return null;
+            }
+          }),
+        );
+        if (!cancelled) {
+          setPools(settled.filter((item): item is MarketPool => item !== null));
+        }
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Couldn't load pools.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshKey]);
+
+  return { pools, loading, error };
+}
+
 export function LiquidityPoolFlow() {
   return (
     <Suspense
@@ -164,11 +193,11 @@ function LiquidityPageContent() {
   const [confirmOpen, setConfirmOpen] = useState(
     () => searchParams.get("confirm") === "1",
   );
-  const [quote, setQuote] = useState<LiquidityQuote>({
-    action: "Add liquidity",
-    rows: [],
-    note: "USDC is deposited into the AMM pool. You can withdraw before expiry, subject to available liquidity.",
-  });
+  const [quote, setQuote] = useState<LiquidityQuote | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const { pools, loading: poolsLoading, error: poolsError } = useMarketPools(refreshKey);
 
   useEffect(() => {
     setConfirmOpen(searchParams.get("confirm") === "1");
@@ -193,6 +222,7 @@ function LiquidityPageContent() {
   const openConfirm = useCallback(
     (next: LiquidityQuote) => {
       setQuote(next);
+      setSubmitError(null);
       const params = new URLSearchParams(searchParams.toString());
       params.set("confirm", "1");
       if (tab !== "add") {
@@ -211,6 +241,21 @@ function LiquidityPageContent() {
     const query = params.toString();
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
   }, [pathname, router, searchParams]);
+
+  const handleConfirm = useCallback(async () => {
+    if (!quote) return;
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      await quote.onConfirm();
+      closeConfirm();
+      setRefreshKey((key) => key + 1);
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "Transaction failed.");
+    } finally {
+      setSubmitting(false);
+    }
+  }, [closeConfirm, quote]);
 
   return (
     <AppShell lockViewport>
@@ -240,26 +285,41 @@ function LiquidityPageContent() {
             </div>
           </div>
 
-          {tab === "add" ? <AddPanel onConfirm={openConfirm} /> : null}
-          {tab === "remove" ? <RemovePanel onConfirm={openConfirm} /> : null}
+          {poolsError ? (
+            <p className="m-0 font-body text-caption-2 text-primary-3" role="alert">
+              {poolsError}
+            </p>
+          ) : null}
+
+          {tab === "add" ? (
+            <AddPanel onConfirm={openConfirm} pools={pools} loading={poolsLoading} />
+          ) : null}
+          {tab === "remove" ? (
+            <RemovePanel onConfirm={openConfirm} pools={pools} refreshKey={refreshKey} />
+          ) : null}
           {tab === "position" ? (
-            <PositionsPanel onAdd={() => setTab("add")} />
+            <PositionsPanel onAdd={() => setTab("add")} pools={pools} refreshKey={refreshKey} />
           ) : null}
         </div>
       </main>
 
       <ConfirmTransactionModal
-        open={confirmOpen && quote.rows.length > 0}
-        action={quote.action}
+        open={confirmOpen && (quote?.rows.length ?? 0) > 0}
+        action={quote?.action}
         rows={
-          quote.rows.length > 0
+          quote && quote.rows.length > 0
             ? [{ label: "Action", value: quote.action }, ...quote.rows]
             : undefined
         }
-        note={quote.note}
+        note={submitError ?? quote?.note}
         onCancel={closeConfirm}
-        onConfirm={closeConfirm}
+        onConfirm={handleConfirm}
       />
+      {submitting ? (
+        <p className="sr-only" role="status">
+          Waiting for wallet confirmation…
+        </p>
+      ) : null}
     </AppShell>
   );
 }
@@ -343,7 +403,7 @@ function UtilizationBar({ value }: { value: number }) {
   return (
     <div className="flex w-full flex-col justify-center gap-2.5 rounded-[10px] border border-neutrals-4 bg-neutrals-1 px-4 py-4 sm:px-6">
       <div className="flex h-[33px] w-full items-center justify-between font-body font-medium text-neutrals-8">
-        <span className="text-base leading-6">Pool utilization</span>
+        <span className="text-base leading-6">Pool skew</span>
         <span className="text-sm leading-6 tabular-nums">{current}%</span>
       </div>
       <Slider
@@ -352,56 +412,50 @@ function UtilizationBar({ value }: { value: number }) {
         max={100}
         step={1}
         value={[current]}
-        aria-label="Pool utilization"
-        onValueChange={([next]) => setCurrent(next)}
+        aria-label="Pool skew"
+        disabled
       />
       <div className="flex h-[33px] w-full items-center justify-between font-body text-caption-2">
-        <button
-          type="button"
-          className={cn(
-            "rounded-sm leading-5 transition-colors duration-200 hover:text-neutrals-8",
-            band === "low" ? "font-medium text-neutrals-8" : "text-neutrals-4",
-          )}
-          onClick={() => setCurrent(20)}
-        >
+        <span className={cn("leading-5", band === "low" ? "font-medium text-neutrals-8" : "text-neutrals-4")}>
           Low
-        </button>
-        <button
-          type="button"
-          className={cn(
-            "rounded-sm leading-5 transition-colors duration-200 hover:text-neutrals-8",
-            band === "medium" ? "font-medium text-neutrals-8" : "text-neutrals-4",
-          )}
-          onClick={() => setCurrent(50)}
-        >
+        </span>
+        <span className={cn("leading-5", band === "medium" ? "font-medium text-neutrals-8" : "text-neutrals-4")}>
           Medium
-        </button>
-        <button
-          type="button"
-          className={cn(
-            "rounded-sm leading-5 transition-colors duration-200 hover:text-neutrals-8",
-            band === "high" ? "font-medium text-neutrals-8" : "text-neutrals-4",
-          )}
-          onClick={() => setCurrent(85)}
-        >
+        </span>
+        <span className={cn("leading-5", band === "high" ? "font-medium text-neutrals-8" : "text-neutrals-4")}>
           High
-        </button>
+        </span>
       </div>
     </div>
   );
 }
 
-function AddPanel({ onConfirm }: { onConfirm: (quote: LiquidityQuote) => void }) {
+function AddPanel({
+  onConfirm,
+  pools,
+  loading,
+}: {
+  onConfirm: (quote: LiquidityQuote) => void;
+  pools: MarketPool[];
+  loading: boolean;
+}) {
   const { address } = useAppKitAccount();
   const { caipNetworkId } = useAppKitNetwork();
   const cluster = clusterFromNetwork(
     typeof caipNetworkId === "string" ? caipNetworkId : undefined,
   );
+  const sendTx = useSendUnsignedTx();
   const [usdcBalance, setUsdcBalance] = useState(0);
   const [assetsError, setAssetsError] = useState<string | null>(null);
   const [assetsLoading, setAssetsLoading] = useState(true);
-  const [selectedId, setSelectedId] = useState<string>(POOLS[0].id);
+  const [selectedId, setSelectedId] = useState<string>("");
   const [amountInput, setAmountInput] = useState("500");
+
+  useEffect(() => {
+    if (!selectedId && pools.length > 0) {
+      setSelectedId(pools[0].market.address);
+    }
+  }, [pools, selectedId]);
 
   useEffect(() => {
     if (!address) return;
@@ -426,18 +480,31 @@ function AddPanel({ onConfirm }: { onConfirm: (quote: LiquidityQuote) => void })
     };
   }, [address, cluster]);
 
-  const pool = POOLS.find((item) => item.id === selectedId) ?? POOLS[0];
+  const entry = pools.find((item) => item.market.address === selectedId) ?? pools[0];
   const amount = parseAmount(amountInput);
   const exceedsBalance =
     !assetsLoading && amount !== null && amount > usdcBalance + 0.0001;
   const canSubmit =
-    !assetsLoading && amount !== null && amount > 0 && !exceedsBalance;
+    !assetsLoading && Boolean(entry) && amount !== null && amount > 0 && !exceedsBalance;
   const lpTokens = amount ?? 0;
+  const tvl = entry ? tvlOf(entry.pool) : 0;
+  const utilization = entry ? utilizationOf(entry.pool) : 0;
+  const feePercent = entry ? entry.pool.feeBps / 100 : 0;
 
   function handleAmountChange(value: string) {
     if (value === "" || /^\d*\.?\d*$/.test(value)) {
       setAmountInput(value);
     }
+  }
+
+  if (!loading && pools.length === 0) {
+    return (
+      <div className="flex w-full flex-col items-start gap-2 rounded-[10px] bg-neutrals-2 px-6 py-8">
+        <p className="m-0 font-body text-sm font-medium leading-6 text-neutrals-8">
+          No pools available yet
+        </p>
+      </div>
+    );
   }
 
   return (
@@ -447,16 +514,17 @@ function AddPanel({ onConfirm }: { onConfirm: (quote: LiquidityQuote) => void })
           <AssetSelect
             value={selectedId}
             onChange={setSelectedId}
-            options={POOLS.map((item) => ({
-              id: item.id,
-              symbol: item.symbol,
-              name: item.name,
-              iconUrl: item.iconUrl,
+            disabled={loading}
+            options={pools.map((item) => ({
+              id: item.market.address,
+              symbol: item.market.assetSymbol,
+              name: nameFor(item.market.assetSymbol),
+              iconUrl: iconFor(item.market.assetSymbol),
             }))}
           />
           <div className="flex flex-col items-end justify-center font-body text-sm font-medium leading-6 tabular-nums">
-            <span className="text-neutrals-8">${formatUsd(pool.tvl, 0)}</span>
-            <span className="text-[#8b5cf6]">{pool.apr.toFixed(1)}% APR</span>
+            <span className="text-neutrals-8">${formatUsd(tvl, 0)}</span>
+            <span className="text-[#8b5cf6]">{feePercent.toFixed(2)}% fee</span>
           </div>
         </div>
         {assetsError ? (
@@ -518,7 +586,7 @@ function AddPanel({ onConfirm }: { onConfirm: (quote: LiquidityQuote) => void })
           </div>
         </div>
 
-        <UtilizationBar value={pool.utilization} />
+        <UtilizationBar value={utilization} />
       </div>
 
       <aside className="flex h-auto min-h-0 flex-col gap-6 rounded-[10px] bg-neutrals-2 px-5 py-5 shadow-[inset_0_1px_0_rgba(252,252,253,0.06)] sm:px-8 sm:py-4 lg:h-full lg:gap-8">
@@ -528,7 +596,7 @@ function AddPanel({ onConfirm }: { onConfirm: (quote: LiquidityQuote) => void })
             ${formatUsd(amount ?? 0)}
           </p>
           <p className="m-0 font-body text-body-2 text-neutrals-5">
-            into the {pool.symbol} pool
+            into the {entry?.market.assetSymbol ?? "-"} pool
           </p>
         </div>
         <div className="h-px w-full bg-neutrals-3" />
@@ -536,11 +604,11 @@ function AddPanel({ onConfirm }: { onConfirm: (quote: LiquidityQuote) => void })
           variant="flush"
           className="min-h-0 flex-1"
           rows={[
-            { label: "Pool TVL", value: `$${formatUsd(pool.tvl)}` },
-            { label: "Your APR (est.)", value: `${pool.apr.toFixed(1)}%` },
+            { label: "Pool TVL", value: `$${formatUsd(tvl)}` },
+            { label: "Fee rate", value: `${feePercent.toFixed(2)}%` },
             {
               label: "LP tokens received",
-              value: `${formatTokenAmount(lpTokens)} ${pool.lpSymbol}`,
+              value: `${formatTokenAmount(lpTokens)} LP`,
               valueClassName: "text-primary-4",
             },
             { label: "Withdrawal", value: "Anytime, subject to liquidity" },
@@ -552,22 +620,32 @@ function AddPanel({ onConfirm }: { onConfirm: (quote: LiquidityQuote) => void })
           size="medium"
           className="mt-auto h-12 w-full whitespace-normal sm:whitespace-nowrap"
           disabled={!canSubmit}
-          onClick={() =>
+          onClick={() => {
+            if (!entry || !address || amount === null) return;
             onConfirm({
               action: "Add liquidity",
               rows: [
-                { label: "Pool", value: `${pool.symbol} · ${pool.name}` },
+                { label: "Pool", value: `${entry.market.assetSymbol} · ${nameFor(entry.market.assetSymbol)}` },
                 {
                   label: "Deposit",
-                  value: `${formatUsd(amount ?? 0)} USDC`,
+                  value: `${formatUsd(amount)} USDC`,
                   valueClassName: "text-primary-4",
                 },
-                { label: "LP tokens", value: `${formatTokenAmount(lpTokens)} ${pool.lpSymbol}` },
+                { label: "LP tokens", value: `${formatTokenAmount(lpTokens)} LP` },
                 { label: "Network fee", value: "~0.00025 SOL" },
               ],
               note: "USDC is deposited into the AMM pool. You can withdraw before expiry, subject to available liquidity.",
-            })
-          }
+              onConfirm: async () => {
+                const owner = parseWalletAddress(address);
+                const base64 = await buildAddLiquidityTx({
+                  market: entry.market.address,
+                  usdcAmount: toBaseUnits(amount),
+                  wallet: owner,
+                });
+                await sendTx(base64);
+              },
+            });
+          }}
         >
           {canSubmit
             ? `Add liquidity for $${formatUsd(amount ?? 0)}`
@@ -580,29 +658,64 @@ function AddPanel({ onConfirm }: { onConfirm: (quote: LiquidityQuote) => void })
   );
 }
 
-function RemovePanel({ onConfirm }: { onConfirm: (quote: LiquidityQuote) => void }) {
-  const [selectedId, setSelectedId] = useState<string>(MY_POSITIONS[0]?.id ?? "SOL");
-  const [amountInput, setAmountInput] = useState("500");
+function RemovePanel({
+  onConfirm,
+  pools,
+  refreshKey,
+}: {
+  onConfirm: (quote: LiquidityQuote) => void;
+  pools: MarketPool[];
+  refreshKey: number;
+}) {
+  const { address } = useAppKitAccount();
+  const sendTx = useSendUnsignedTx();
+  const [positions, setPositions] = useState<Position[]>([]);
+  const [selectedId, setSelectedId] = useState<string>("");
 
-  const position = MY_POSITIONS.find((item) => item.id === selectedId) ?? MY_POSITIONS[0];
+  useEffect(() => {
+    if (!address) {
+      setPositions([]);
+      return;
+    }
+    const owner = parseWalletAddress(address);
+    let cancelled = false;
+    fetchPositions(owner)
+      .then((data) => {
+        if (!cancelled) setPositions(data.filter((position) => Number(position.lpBalance) > 0));
+      })
+      .catch(() => {
+        if (!cancelled) setPositions([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [address, refreshKey]);
+
+  useEffect(() => {
+    if (!selectedId && positions.length > 0) {
+      setSelectedId(positions[0].market);
+    }
+  }, [positions, selectedId]);
+
+  const position = positions.find((item) => item.market === selectedId) ?? positions[0];
+  const entry = pools.find((item) => item.market.address === position?.market);
+  const [amountInput, setAmountInput] = useState("0");
+
+  useEffect(() => {
+    if (position) setAmountInput(fromBaseUnits(position.lpBalance).toString());
+  }, [position?.market]);
+
+  const lpBalance = position ? fromBaseUnits(position.lpBalance) : 0;
   const amount = parseAmount(amountInput);
-  const exceedsBalance = amount !== null && position != null && amount > position.lp + 0.0001;
+  const exceedsBalance = amount !== null && amount > lpBalance + 0.0001;
   const canSubmit = Boolean(position) && amount !== null && amount > 0 && !exceedsBalance;
-  const valuePerLp = position && position.lp > 0
-    ? (position.deposited + position.fees) / position.lp
-    : 0;
-  const receiveUsd = (amount ?? 0) * valuePerLp;
-  const feesShare = position && position.lp > 0
-    ? ((amount ?? 0) / position.lp) * position.fees
-    : 0;
+
+  const lpSupply = entry ? fromBaseUnits(entry.pool.lpSupply) : 0;
+  const share = lpSupply > 0 ? (amount ?? 0) / lpSupply : 0;
+  const tvl = entry ? tvlOf(entry.pool) : 0;
+  const receiveUsd = share * tvl;
 
   function applyPosition(nextId: string) {
-    const next = MY_POSITIONS.find((item) => item.id === nextId);
-    if (!next) return;
-    const current = parseAmount(amountInput);
-    if (current === null || current > next.lp) {
-      setAmountInput(String(next.lp));
-    }
     setSelectedId(nextId);
   }
 
@@ -625,8 +738,6 @@ function RemovePanel({ onConfirm }: { onConfirm: (quote: LiquidityQuote) => void
     );
   }
 
-  const pool = POOLS.find((item) => item.id === position.id);
-
   return (
     <div className="grid min-h-0 w-full flex-1 grid-cols-1 gap-6 lg:grid-cols-2 lg:items-stretch lg:gap-x-[49px] lg:gap-y-8">
       <div className="flex flex-col gap-5 lg:gap-[25px]">
@@ -634,15 +745,15 @@ function RemovePanel({ onConfirm }: { onConfirm: (quote: LiquidityQuote) => void
           <AssetSelect
             value={selectedId}
             onChange={applyPosition}
-            options={MY_POSITIONS.map((item) => ({
-              id: item.id,
-              symbol: item.symbol,
-              name: item.name,
-              iconUrl: item.iconUrl,
+            options={positions.map((item) => ({
+              id: item.market,
+              symbol: item.assetSymbol,
+              name: nameFor(item.assetSymbol),
+              iconUrl: iconFor(item.assetSymbol),
             }))}
           />
           <div className="flex flex-col items-end justify-center font-body text-sm font-medium leading-6 tabular-nums">
-            <span className="text-neutrals-8">{formatTokenAmount(position.lp)}</span>
+            <span className="text-neutrals-8">{formatTokenAmount(lpBalance)}</span>
             <span className="text-neutrals-5">Your LP tokens</span>
           </div>
         </div>
@@ -668,13 +779,13 @@ function RemovePanel({ onConfirm }: { onConfirm: (quote: LiquidityQuote) => void
               placeholder="0"
             />
             <span className="shrink-0 font-body text-sm font-medium leading-6 text-neutrals-5 tabular-nums sm:text-base">
-              ≈ ${formatUsd(receiveUsd)} including fees
+              ≈ ${formatUsd(receiveUsd)}
             </span>
           </div>
           <div className="flex w-full items-end justify-between gap-4 sm:items-center">
             <div className="font-body text-caption-2 tabular-nums">
               <p className={cn("m-0 leading-5", exceedsBalance ? "text-primary-3" : "text-neutrals-4")}>
-                Available to withdraw: {formatTokenAmount(position.lp)} {pool?.lpSymbol ?? "sLP"}
+                Available to withdraw: {formatTokenAmount(lpBalance)} LP
               </p>
               {exceedsBalance ? (
                 <p className="m-0 leading-5 text-primary-3" role="alert">
@@ -686,14 +797,14 @@ function RemovePanel({ onConfirm }: { onConfirm: (quote: LiquidityQuote) => void
               type="button"
               variant="dark"
               size="small"
-              onClick={() => setAmountInput(String(position.lp))}
+              onClick={() => setAmountInput(String(lpBalance))}
             >
               Max
             </UiButton>
           </div>
         </div>
 
-        <UtilizationBar value={pool?.utilization ?? 0} />
+        <UtilizationBar value={entry ? utilizationOf(entry.pool) : 0} />
       </div>
 
       <aside className="flex h-auto min-h-0 flex-col gap-6 rounded-[10px] bg-neutrals-2 px-5 py-5 shadow-[inset_0_1px_0_rgba(252,252,253,0.06)] sm:px-8 sm:py-4 lg:h-full lg:gap-8">
@@ -703,7 +814,7 @@ function RemovePanel({ onConfirm }: { onConfirm: (quote: LiquidityQuote) => void
             ${formatUsd(receiveUsd)}
           </p>
           <p className="m-0 font-body text-body-2 text-neutrals-5">
-            including ${formatUsd(feesShare)} in fees
+            {(share * 100).toFixed(2)}% of the pool
           </p>
         </div>
         <div className="h-px w-full bg-neutrals-3" />
@@ -711,8 +822,7 @@ function RemovePanel({ onConfirm }: { onConfirm: (quote: LiquidityQuote) => void
           variant="flush"
           className="min-h-0 flex-1"
           rows={[
-            { label: "Your deposit", value: `$${formatUsd(position.deposited)}` },
-            { label: "Fees earned", value: `+$${formatUsd(position.fees)}` },
+            { label: "LP tokens", value: `${formatTokenAmount(amount ?? 0)} LP` },
             {
               label: "You'll receive",
               value: `${formatUsd(receiveUsd)} USDC`,
@@ -727,12 +837,13 @@ function RemovePanel({ onConfirm }: { onConfirm: (quote: LiquidityQuote) => void
           size="medium"
           className="mt-auto h-12 w-full whitespace-normal sm:whitespace-nowrap"
           disabled={!canSubmit}
-          onClick={() =>
+          onClick={() => {
+            if (!address || amount === null) return;
             onConfirm({
               action: "Withdraw liquidity",
               rows: [
-                { label: "Pool", value: `${position.symbol} · ${position.name}` },
-                { label: "LP tokens", value: `${formatTokenAmount(amount ?? 0)} ${pool?.lpSymbol ?? "sLP"}` },
+                { label: "Pool", value: `${position.assetSymbol} · ${nameFor(position.assetSymbol)}` },
+                { label: "LP tokens", value: `${formatTokenAmount(amount)} LP` },
                 {
                   label: "You receive",
                   value: `${formatUsd(receiveUsd)} USDC`,
@@ -741,11 +852,20 @@ function RemovePanel({ onConfirm }: { onConfirm: (quote: LiquidityQuote) => void
                 { label: "Network fee", value: "~0.00025 SOL" },
               ],
               note: "LP tokens are burned and USDC returns to your wallet, including your share of earned fees.",
-            })
-          }
+              onConfirm: async () => {
+                const owner = parseWalletAddress(address);
+                const base64 = await buildRemoveLiquidityTx({
+                  market: position.market,
+                  lpAmount: toBaseUnits(amount),
+                  wallet: owner,
+                });
+                await sendTx(base64);
+              },
+            });
+          }}
         >
           {canSubmit
-            ? `Withdraw ${formatTokenAmount(amount ?? 0)} ${pool?.lpSymbol ?? "sLP"}`
+            ? `Withdraw ${formatTokenAmount(amount ?? 0)} LP`
             : exceedsBalance
               ? "Amount exceeds your LP balance"
               : "Enter a withdraw amount"}
@@ -755,9 +875,49 @@ function RemovePanel({ onConfirm }: { onConfirm: (quote: LiquidityQuote) => void
   );
 }
 
-function PositionsPanel({ onAdd }: { onAdd: () => void }) {
+function PositionsPanel({
+  onAdd,
+  pools,
+  refreshKey,
+}: {
+  onAdd: () => void;
+  pools: MarketPool[];
+  refreshKey: number;
+}) {
+  const { address } = useAppKitAccount();
   const [token, setToken] = useState("all");
-  const rows = MY_POSITIONS.filter((row) => token === "all" || row.symbol === token);
+  const [positions, setPositions] = useState<Position[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!address) {
+      setPositions([]);
+      setLoading(false);
+      return;
+    }
+    const owner = parseWalletAddress(address);
+    let cancelled = false;
+    setLoading(true);
+    fetchPositions(owner)
+      .then((data) => {
+        if (!cancelled) setPositions(data.filter((position) => Number(position.lpBalance) > 0));
+      })
+      .catch(() => {
+        if (!cancelled) setPositions([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [address, refreshKey]);
+
+  const rows = positions.filter((row) => token === "all" || row.assetSymbol === token);
+
+  if (loading) {
+    return <div className="h-24 w-full animate-pulse rounded-[10px] bg-neutrals-2" />;
+  }
 
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col gap-4 lg:overflow-hidden">
@@ -791,42 +951,44 @@ function PositionsPanel({ onAdd }: { onAdd: () => void }) {
             <thead className="sticky top-0 bg-neutrals-1">
               <tr className="border-b border-neutrals-3">
                 <th className="px-4 py-3 font-body text-caption-2 font-medium text-neutrals-4">Asset</th>
-                <th className="px-4 py-3 font-body text-caption-2 font-medium text-neutrals-4">Deposited</th>
-                <th className="px-4 py-3 font-body text-caption-2 font-medium text-neutrals-4">Fees</th>
+                <th className="px-4 py-3 font-body text-caption-2 font-medium text-neutrals-4">LP tokens</th>
                 <th className="px-4 py-3 font-body text-caption-2 font-medium text-neutrals-4">Share</th>
                 <th className="px-4 py-3 font-body text-caption-2 font-medium text-neutrals-4">Status</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
-                <tr key={row.id} className="border-b border-neutrals-3 last:border-b-0">
-                  <td className="px-4 py-3">
-                    <span className="flex min-w-0 items-center gap-2.5">
-                      <TokenIcon src={row.iconUrl} symbol={row.symbol} />
-                      <span className="flex min-w-0 flex-col">
-                        <span className="truncate font-body text-sm font-medium leading-6 text-neutrals-8">
-                          {row.symbol}
-                        </span>
-                        <span className="truncate font-body text-caption-2 text-neutrals-4">
-                          {row.name}
+              {rows.map((row) => {
+                const entry = pools.find((item) => item.market.address === row.market);
+                const lpSupply = entry ? fromBaseUnits(entry.pool.lpSupply) : 0;
+                const lpBalance = fromBaseUnits(row.lpBalance);
+                const share = lpSupply > 0 ? (lpBalance / lpSupply) * 100 : 0;
+                return (
+                  <tr key={row.market} className="border-b border-neutrals-3 last:border-b-0">
+                    <td className="px-4 py-3">
+                      <span className="flex min-w-0 items-center gap-2.5">
+                        <TokenIcon src={iconFor(row.assetSymbol)} symbol={row.assetSymbol} />
+                        <span className="flex min-w-0 flex-col">
+                          <span className="truncate font-body text-sm font-medium leading-6 text-neutrals-8">
+                            {row.assetSymbol}
+                          </span>
+                          <span className="truncate font-body text-caption-2 text-neutrals-4">
+                            {nameFor(row.assetSymbol)}
+                          </span>
                         </span>
                       </span>
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 font-body text-sm leading-6 text-neutrals-8 tabular-nums">
-                    ${formatUsd(row.deposited)}
-                  </td>
-                  <td className="px-4 py-3 font-body text-sm leading-6 text-primary-4 tabular-nums">
-                    +${formatUsd(row.fees)}
-                  </td>
-                  <td className="px-4 py-3 font-body text-sm leading-6 text-neutrals-8 tabular-nums">
-                    {row.share}
-                  </td>
-                  <td className="px-4 py-3">
-                    <StatusPill>Earning</StatusPill>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="px-4 py-3 font-body text-sm leading-6 text-neutrals-8 tabular-nums">
+                      {formatTokenAmount(lpBalance)}
+                    </td>
+                    <td className="px-4 py-3 font-body text-sm leading-6 text-neutrals-8 tabular-nums">
+                      {share.toFixed(2)}%
+                    </td>
+                    <td className="px-4 py-3">
+                      <StatusPill>Earning</StatusPill>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
