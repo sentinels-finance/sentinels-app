@@ -6,6 +6,8 @@ import { NotFoundError } from "@/server/lib/errors";
 import { getAmmProgram, getMarketProgram } from "@/server/solana/anchor-client";
 import { PROGRAM_IDS } from "@/server/solana/programs";
 import { priceDown, priceUp } from "@/server/solana/lmsr";
+import { env } from "@/server/lib/env";
+import { getDemoPool } from "@/server/demo/fixtures";
 import type { Pool } from "@/server/types/pool";
 
 // See market-service.ts's `marketAccountClient` comment — same reason for the `any` here:
@@ -16,6 +18,12 @@ function ammPoolAccountClient(program: ReturnType<typeof getAmmProgram>) {
 }
 
 export async function getPool(marketAddress: string): Promise<Pool> {
+  if (env.demoMode) {
+    const pool = getDemoPool(marketAddress);
+    if (!pool) throw new NotFoundError(`No AMM pool for market ${marketAddress}`);
+    return pool;
+  }
+
   let marketPubkey: PublicKey;
   try {
     marketPubkey = new PublicKey(marketAddress);

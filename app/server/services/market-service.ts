@@ -3,6 +3,8 @@ import { PublicKey } from "@solana/web3.js";
 import { BadRequestError, NotFoundError } from "@/server/lib/errors";
 import { getMarketProgram } from "@/server/solana/anchor-client";
 import { symbolForFeedId, KNOWN_ASSET_SYMBOLS } from "@/server/solana/assets";
+import { env } from "@/server/lib/env";
+import { listDemoMarkets, getDemoMarket } from "@/server/demo/fixtures";
 import type { Market, MarketOutcome, MarketStatus } from "@/server/types/market";
 
 /**
@@ -76,6 +78,13 @@ function validateFilters(filters: MarketFilters): void {
 export async function listMarkets(filters: MarketFilters = {}): Promise<Market[]> {
   validateFilters(filters);
 
+  if (env.demoMode) {
+    let markets = listDemoMarkets();
+    if (filters.asset) markets = markets.filter((m) => m.assetSymbol === filters.asset);
+    if (filters.status) markets = markets.filter((m) => m.status === filters.status);
+    return markets;
+  }
+
   const program = getMarketProgram();
   const entries = await marketAccountClient(program).all();
   let markets: Market[] = entries.map(
@@ -95,6 +104,12 @@ export async function listMarkets(filters: MarketFilters = {}): Promise<Market[]
 }
 
 export async function getMarket(address: string): Promise<Market> {
+  if (env.demoMode) {
+    const market = getDemoMarket(address);
+    if (!market) throw new NotFoundError(`No market at address ${address}`);
+    return market;
+  }
+
   let pubkey: PublicKey;
   try {
     pubkey = new PublicKey(address);

@@ -12,7 +12,19 @@ import { getAmmProgram, getMarketProgram } from "@/server/solana/anchor-client";
 import { resolveMarketContext } from "@/server/solana/market-context";
 import { PROGRAM_IDS } from "@/server/solana/programs";
 import { buildUnsignedTransaction } from "@/server/lib/transaction";
-import { BadRequestError } from "@/server/lib/errors";
+import { BadRequestError, NotFoundError } from "@/server/lib/errors";
+import { env } from "@/server/lib/env";
+import { buildDemoTx } from "@/server/demo/demo-tx";
+import {
+  applyDemoMint,
+  applyDemoSwap,
+  applyDemoProtect,
+  applyDemoRedeem,
+  applyDemoMerge,
+  applyDemoAddLiquidity,
+  applyDemoRemoveLiquidity,
+  getDemoMarket,
+} from "@/server/demo/fixtures";
 
 function parseWallet(wallet: string): PublicKey {
   try {
@@ -66,6 +78,13 @@ export async function buildMintTx(
 ): Promise<string> {
   const userPubkey = parseWallet(wallet);
   const amountBN = parseAmount(amount);
+
+  if (env.demoMode) {
+    if (!getDemoMarket(marketAddress)) throw new NotFoundError(`No market at address ${marketAddress}`);
+    applyDemoMint(wallet, marketAddress, BigInt(amount));
+    return buildDemoTx(userPubkey, `Sentinels demo: mint ${amount}`);
+  }
+
   const ctx = await resolveMarketContext(marketAddress);
 
   const ix = await mintCompleteSetIx(ctx, userPubkey, amountBN);
@@ -144,6 +163,13 @@ export async function buildSwapTx(
     throw new BadRequestError(`sideIn must be "down" or "up", got: ${sideIn}`);
   }
   const userPubkey = parseWallet(wallet);
+
+  if (env.demoMode) {
+    if (!getDemoMarket(marketAddress)) throw new NotFoundError(`No market at address ${marketAddress}`);
+    applyDemoSwap(wallet, marketAddress, sideIn, BigInt(amountIn));
+    return buildDemoTx(userPubkey, `Sentinels demo: swap ${sideIn} ${amountIn}`);
+  }
+
   const ctx = await resolveMarketContext(marketAddress);
 
   const ixs = await swapIxs(
@@ -175,6 +201,13 @@ export async function buildProtectTx(
 ): Promise<string> {
   const userPubkey = parseWallet(wallet);
   const amountBN = parseAmount(amount);
+
+  if (env.demoMode) {
+    if (!getDemoMarket(marketAddress)) throw new NotFoundError(`No market at address ${marketAddress}`);
+    applyDemoProtect(wallet, marketAddress, BigInt(amount));
+    return buildDemoTx(userPubkey, `Sentinels demo: protect ${amount}`);
+  }
+
   const ctx = await resolveMarketContext(marketAddress);
 
   const mintIx = await mintCompleteSetIx(ctx, userPubkey, amountBN);
@@ -192,6 +225,19 @@ export async function buildRedeemTx(
 ): Promise<string> {
   const userPubkey = parseWallet(wallet);
   const amountBN = parseAmount(amount);
+
+  if (env.demoMode) {
+    const market = getDemoMarket(marketAddress);
+    if (!market) throw new NotFoundError(`No market at address ${marketAddress}`);
+    if (market.status !== "resolved") {
+      throw new BadRequestError(
+        `Market ${marketAddress} is not resolved yet — redeem is only available after resolve_market`,
+      );
+    }
+    applyDemoRedeem(wallet, marketAddress, BigInt(amount));
+    return buildDemoTx(userPubkey, `Sentinels demo: redeem ${amount}`);
+  }
+
   const ctx = await resolveMarketContext(marketAddress);
   const program = getMarketProgram();
 
@@ -230,6 +276,13 @@ export async function buildMergeTx(
 ): Promise<string> {
   const userPubkey = parseWallet(wallet);
   const amountBN = parseAmount(amount);
+
+  if (env.demoMode) {
+    if (!getDemoMarket(marketAddress)) throw new NotFoundError(`No market at address ${marketAddress}`);
+    applyDemoMerge(wallet, marketAddress, BigInt(amount));
+    return buildDemoTx(userPubkey, `Sentinels demo: merge ${amount}`);
+  }
+
   const ctx = await resolveMarketContext(marketAddress);
   const program = getMarketProgram();
 
@@ -286,6 +339,13 @@ export async function buildAddLiquidityTx(
 ): Promise<string> {
   const userPubkey = parseWallet(wallet);
   const amountBN = parseAmount(usdcAmount);
+
+  if (env.demoMode) {
+    if (!getDemoMarket(marketAddress)) throw new NotFoundError(`No market at address ${marketAddress}`);
+    applyDemoAddLiquidity(wallet, marketAddress, BigInt(usdcAmount));
+    return buildDemoTx(userPubkey, `Sentinels demo: add-liquidity ${usdcAmount}`);
+  }
+
   const ctx = await resolveMarketContext(marketAddress);
   const { ammPoolPda, pool, ammProgram } = await getPoolContext(ctx.marketPubkey);
 
@@ -325,6 +385,13 @@ export async function buildRemoveLiquidityTx(
 ): Promise<string> {
   const userPubkey = parseWallet(wallet);
   const lpAmountBN = parseAmount(lpAmount);
+
+  if (env.demoMode) {
+    if (!getDemoMarket(marketAddress)) throw new NotFoundError(`No market at address ${marketAddress}`);
+    applyDemoRemoveLiquidity(wallet, marketAddress, BigInt(lpAmount));
+    return buildDemoTx(userPubkey, `Sentinels demo: remove-liquidity ${lpAmount}`);
+  }
+
   const ctx = await resolveMarketContext(marketAddress);
   const { ammPoolPda, pool, ammProgram } = await getPoolContext(ctx.marketPubkey);
 

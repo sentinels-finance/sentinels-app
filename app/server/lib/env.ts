@@ -20,4 +20,12 @@ export const env = {
     "https://api.mainnet-beta.solana.com",
   ),
   solanaCluster: required("SOLANA_CLUSTER", "devnet"),
+  /**
+   * Demo mode: `/api/tx/*` routes swap the real Anchor instructions for a Memo instruction on
+   * the same connection, so the connected wallet still shows a genuine signing popup and the
+   * signature still lands on-chain — but no program account (staleness/expiry included) can
+   * block the flow. Market/pool/position reads switch to in-memory fixtures. See
+   * `server/demo/README.md`. Never enable in a real deployment.
+   */
+  demoMode: process.env.DEMO_MODE === "true",
 };
