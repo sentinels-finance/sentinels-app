@@ -3,114 +3,33 @@
 @tailwind utilities;
 
 :root {
-  --color-primary-1: #3772ff;
-  --color-primary-2: #9757d7;
-  --color-primary-3: #ef466f;
-  --color-primary-4: #45b26b;
+  --neutral-0: 255 255 255;
+  --neutral-50: 245 247 250;
+  --neutral-100: 242 245 248;
+  --neutral-200: 225 228 234;
+  --neutral-300: 202 207 216;
+  --neutral-400: 153 160 174;
+  --neutral-500: 113 119 132;
+  --neutral-600: 82 88 102;
+  --neutral-700: 43 48 59;
+  --neutral-800: 34 37 48;
+  --neutral-900: 24 27 37;
+  --neutral-950: 14 18 27;
 
-  --color-secondary-1: #4bc9f0;
-  --color-secondary-2: #e4d7cf;
-  --color-secondary-3: #ffd166;
-  --color-secondary-4: #cdb4db;
-
-  --color-neutrals-1: #141416;
-  --color-neutrals-2: #23262f;
-  --color-neutrals-3: #353945;
-  --color-neutrals-4: #777e90;
-  --color-neutrals-5: #b1b5c3;
-  --color-neutrals-6: #e6e8ec;
-  --color-neutrals-7: #f4f5f6;
-  --color-neutrals-8: #fcfcfd;
-
-  --color-shade-1: #1b1b1b;
-  --color-shade-7: #ffffff;
-
-  --paper: color-mix(in srgb, var(--color-shade-7) 96%, var(--color-shade-1));
-  --paper-raise: var(--color-shade-7);
-  --paper-line: color-mix(in srgb, var(--color-shade-1) 10%, var(--color-shade-7));
-  --ink: var(--color-shade-1);
-  --ink-soft: color-mix(in srgb, var(--color-shade-1) 62%, var(--color-shade-7));
-  --ink-faint: color-mix(in srgb, var(--color-shade-1) 42%, var(--color-shade-7));
-  --accent: var(--color-primary-1);
-  --accent-soft: color-mix(in srgb, var(--color-primary-1) 82%, var(--color-shade-7));
-  --accent-ink: var(--color-shade-7);
-  --up: var(--color-primary-4);
-  --down: var(--color-primary-3);
-
-  --font-display: "DM Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-body: "Poppins", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", monospace;
-
-  --radius: 12px;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --paper: var(--color-shade-1);
-    --paper-raise: color-mix(in srgb, var(--color-shade-1) 88%, var(--color-shade-7));
-    --paper-line: color-mix(in srgb, var(--color-shade-7) 12%, var(--color-shade-1));
-    --ink: var(--color-shade-7);
-    --ink-soft: color-mix(in srgb, var(--color-shade-7) 65%, var(--color-shade-1));
-    --ink-faint: color-mix(in srgb, var(--color-shade-7) 42%, var(--color-shade-1));
-    --accent-soft: color-mix(in srgb, var(--color-primary-1) 82%, var(--color-shade-1));
-  }
-}
-
-:root[data-theme="dark"] {
-  --paper: var(--color-shade-1);
-  --paper-raise: color-mix(in srgb, var(--color-shade-1) 88%, var(--color-shade-7));
-  --paper-line: color-mix(in srgb, var(--color-shade-7) 12%, var(--color-shade-1));
-  --ink: var(--color-shade-7);
-  --ink-soft: color-mix(in srgb, var(--color-shade-7) 65%, var(--color-shade-1));
-  --ink-faint: color-mix(in srgb, var(--color-shade-7) 42%, var(--color-shade-1));
-  --accent-soft: color-mix(in srgb, var(--color-primary-1) 82%, var(--color-shade-1));
+  --primary-400: 96 165 250;
+  --primary-500: 59 130 246;
+  --primary-700: 29 78 216;
+  --primary-900: 30 58 138;
+  --success-500: 39 192 110;
 }
 
 @layer base {
-  * {
-    @apply box-border;
-  }
-
   html,
   body {
     @apply m-0 overflow-x-clip p-0;
   }
 
   body {
-    @apply bg-paper font-body text-base font-normal leading-6 text-ink antialiased;
-  }
-
-  a {
-    color: inherit;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  * {
-    animation-duration: 0.001ms !important;
-    transition-duration: 0.001ms !important;
-  }
-}
-
-/*
- * Scroll reveal (see components/atoms/reveal.tsx).
- *
- * The hidden state lives behind `scripting: enabled` on purpose: if JS never runs,
- * the query doesn't match and the content is simply visible rather than stuck at
- * `opacity: 0`. Reduced-motion is excluded for the same reason.
- */
-@media (scripting: enabled) and (prefers-reduced-motion: no-preference) {
-  [data-reveal] {
-    opacity: 0;
-    transform: translateY(16px);
-  }
-
-  [data-reveal][data-shown="true"] {
-    opacity: 1;
-    transform: none;
-    transition:
-      opacity 700ms cubic-bezier(0.22, 1, 0.36, 1),
-      transform 700ms cubic-bezier(0.22, 1, 0.36, 1);
-    transition-delay: var(--reveal-delay, 0ms);
+    @apply bg-strong-950 font-sans text-base text-white antialiased;
   }
 }

@@ -35,11 +35,10 @@ aren't program milestones) and `docs/product/personas.md`.
 
 Frontend application flows (market list, Protect, positions/redeem, provide-liquidity) are out
 of scope until `docs/product/planned/m7-frontend.md` is unblocked by M6 (the TypeScript SDK) —
-see `docs/PRD.md`. Ahead of that sequencing, `app/` holds a Tailwind + shadcn design system
-(atomic folders, no CSS Modules), a full landing page on `/`, and static UI shells on
-`/connect`, `/market` and `/liquidity` — no wallet connection, SDK integration, or live market
-data; see `docs/features/design-system.md`. Don't wire `app/` into the gated application flows
-without the user explicitly asking.
+see `docs/PRD.md`. Ahead of that sequencing, `app/` holds a Tailwind design system (Nexora
+tokens, atomic folders, no CSS Modules) and a landing page on `/` — no wallet connection, SDK
+integration, or live market data; see `docs/features/design-system.md`. Don't wire `app/` into
+the gated application flows without the user explicitly asking.
 
 ## Suggested repo layout
 

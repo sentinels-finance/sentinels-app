@@ -24,12 +24,11 @@ const nextConfig = {
     return config;
   },
   async redirects() {
-    return [{ source: "/connect", destination: "/app/market", permanent: false }];
-  },
-  async rewrites() {
     return [
-      { source: "/app/market", destination: "/market" },
-      { source: "/app/liquidity", destination: "/liquidity" },
+      { source: "/connect", destination: "/", permanent: false },
+      { source: "/market", destination: "/", permanent: false },
+      { source: "/app/market", destination: "/", permanent: false },
+      { source: "/app/liquidity", destination: "/", permanent: false },
     ];
   },
   webpack: (config) => {

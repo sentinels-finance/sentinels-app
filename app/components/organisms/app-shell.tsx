@@ -1,94 +1,41 @@
-"use client";
+import { AppNav } from "@/components/organisms/app-nav";
 
-import type { ReactNode } from "react";
-import { usePathname } from "next/navigation";
-import { useAppKit, useAppKitAccount, useAppKitState } from "@reown/appkit/react";
-import { AppNav, type AppNavActive } from "@/components/organisms/app-nav";
-import { Button as UiButton } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-import { REOWN_PROJECT_ID } from "@/lib/wallet/appkit-config";
-
-type AppShellProps = {
-  activeNav?: AppNavActive;
-  children: ReactNode;
-  lockViewport?: boolean;
-};
-
-function resolveActiveNav(pathname: string | null, activeNav?: AppNavActive): AppNavActive | undefined {
-  if (activeNav) return activeNav;
-  if (
-    pathname?.startsWith("/app/liquidity") ||
-    pathname?.startsWith("/liquidity")
-  ) {
-    return "liquidity";
-  }
-  if (pathname?.startsWith("/app/market") || pathname?.startsWith("/market")) {
-    return "market";
-  }
-  return undefined;
-}
-
-function ConnectPrompt() {
-  const { open } = useAppKit();
-  const { open: isModalOpen } = useAppKitState();
-  const canConnect = Boolean(REOWN_PROJECT_ID);
-
+export function AppShell({ children }: { children: React.ReactNode }) {
   return (
-    <main className="mx-auto flex w-full max-w-[640px] flex-col items-center gap-6 px-4 py-10 text-center sm:py-0">
-      <h1 className="m-0 font-display text-[32px] font-bold leading-10 tracking-[-0.32px] text-neutrals-8">
-        Connect your wallet
-      </h1>
-      <p className="m-0 max-w-[65ch] font-body text-caption-2 text-neutrals-5">
-        Connect a Solana wallet to view markets and buy coverage.
-      </p>
-      <UiButton
-        type="button"
-        variant="neutral"
-        size="medium"
-        className="active:scale-[0.98]"
-        disabled={!canConnect || isModalOpen}
-        onClick={() => open({ view: "Connect" })}
+    <div className="relative min-h-screen overflow-x-clip bg-strong-950">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute left-1/2 top-0 h-[780px] w-[1440px] -translate-x-1/2"
       >
-        {isModalOpen ? "Waiting for wallet" : "Connect wallet"}
-      </UiButton>
-      {!canConnect ? (
-        <p className="m-0 font-body text-caption text-neutrals-5" role="alert">
-          Wallet connect is not configured. Add a Reown project ID to continue.
-        </p>
-      ) : null}
-    </main>
+        <img
+          alt=""
+          src="/landing/lightbeam-70.svg"
+          className="absolute left-[128px] top-[-548px] h-[1043px] w-[1183px] max-w-none mix-blend-plus-lighter"
+        />
+        <img
+          alt=""
+          src="/landing/lightbeam-69.svg"
+          className="absolute left-[283px] top-[-548px] h-[1043px] w-[873px] max-w-none mix-blend-plus-lighter"
+        />
+        <img
+          alt=""
+          src="/landing/lightbeam-68.svg"
+          className="absolute left-[435px] top-[-512px] h-[971px] w-[569px] max-w-none mix-blend-plus-lighter"
+        />
+      </div>
+      <AppNav />
+      <main className="relative mx-auto flex w-full max-w-[1160px] flex-col gap-[50px] px-4 pb-16 pt-[168px] md:px-0">
+        {children}
+      </main>
+    </div>
   );
 }
 
-export function AppShell({ activeNav, children, lockViewport = false }: AppShellProps) {
-  const pathname = usePathname();
-  const resolved = resolveActiveNav(pathname, activeNav);
-  const { isConnected } = useAppKitAccount();
-
+export function AppPageHeader({ title, subtitle }: { title: string; subtitle: string }) {
   return (
-    <div
-      className={cn(
-        "relative flex flex-col overflow-hidden bg-neutrals-1",
-        lockViewport ? "h-dvh" : "min-h-dvh",
-      )}
-    >
-      <AppNav active={resolved} />
-      <div
-        className={cn(
-          "flex min-h-0 flex-1 flex-col",
-          lockViewport ? "overflow-y-auto lg:overflow-hidden" : "overflow-y-auto",
-        )}
-      >
-        <div
-          className={cn(
-            "w-full",
-            isConnected ? "mx-auto" : "m-auto",
-            lockViewport && isConnected && "h-full min-h-0 flex-1",
-          )}
-        >
-          {isConnected ? children : <ConnectPrompt />}
-        </div>
-      </div>
-    </div>
+    <header className="flex w-full flex-col items-center gap-md text-center">
+      <h1 className="w-full bg-heading-gradient bg-clip-text text-h3 text-transparent">{title}</h1>
+      <p className="w-full text-body-md text-soft-300">{subtitle}</p>
+    </header>
   );
 }

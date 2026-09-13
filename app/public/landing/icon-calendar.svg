@@ -1,0 +1,8 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="calendar">
+<path id="Icon" d="M18.3 4.8H5.7C4.70589 4.8 3.9 5.60589 3.9 6.6V19.2C3.9 20.1941 4.70589 21 5.7 21H18.3C19.2941 21 20.1 20.1941 20.1 19.2V6.6C20.1 5.60589 19.2941 4.8 18.3 4.8Z" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="Icon_2" d="M3.9 10.2H20.1" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="Icon_3" d="M15.6 3V6.6" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="Icon_4" d="M8.4 3V6.6" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+</svg>

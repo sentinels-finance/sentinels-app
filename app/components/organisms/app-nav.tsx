@@ -1,113 +1,64 @@
 "use client";
 
-import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useAppKit, useAppKitAccount } from "@reown/appkit/react";
-import { Logo } from "@/components/atoms/logo";
-import { Button as UiButton } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-import { REOWN_PROJECT_ID } from "@/lib/wallet/appkit-config";
+import { Button } from "@/components/atoms/button";
+import { truncateAddress } from "@/lib/app-format";
+import { parseWalletAddress } from "@/lib/wallet/assets";
 
-export type AppNavActive = "market" | "liquidity";
+const links = [
+  { label: "Protect", href: "/protect" },
+  { label: "Positions", href: "/positions" },
+  { label: "History", href: "/history" },
+  { label: "Liquidity Pool", href: "/liquidity" },
+  { label: "Docs", href: "#" },
+] as const;
 
-type AppNavProps = {
-  active?: AppNavActive;
-};
-
-const NAV_ITEMS: {
-  id: AppNavActive | "docs";
-  label: string;
-  href: string;
-}[] = [
-  { id: "market", label: "Market", href: "/app/market" },
-  { id: "liquidity", label: "Liquidity Pool", href: "/app/liquidity" },
-  { id: "docs", label: "Docs", href: "#" },
-];
-
-function shortenAddress(address: string) {
-  if (address.length <= 8) return address;
-  return `${address.slice(0, 4)}…${address.slice(-4)}`;
-}
-
-export function AppNav({ active }: AppNavProps) {
+export function AppNav() {
+  const pathname = usePathname();
   const { open } = useAppKit();
-  const { isConnected, address } = useAppKitAccount();
-  const canConnect = Boolean(REOWN_PROJECT_ID);
+  const { address, isConnected } = useAppKitAccount();
 
   return (
-    <header className="sticky top-0 z-30 w-full bg-neutrals-1">
-      <div className="mx-auto flex h-16 w-full max-w-[1120px] items-center justify-between px-4 md:h-20 xl:px-0">
-        <div className="flex min-w-0 items-center gap-6 md:gap-12">
-          <div className="flex items-center gap-6 md:gap-[81px]">
-            <Link href="/" aria-label="Sentinel home">
-              <span className="md:hidden">
-                <Logo wordmark size={40} />
+    <header className="pointer-events-none absolute inset-x-0 top-0 z-50 flex justify-center px-4 pt-12 md:px-9xl">
+      <nav className="pointer-events-auto flex h-14 w-full max-w-[1160px] items-center gap-3xl overflow-clip rounded-lg bg-neutral-400/10 p-sm shadow-[inset_0_0_0_1px_rgb(153_160_174/0.1)] backdrop-blur-[28px]">
+        <div className="flex h-8 w-[99px] shrink-0 flex-col items-start pl-sm">
+          <a href="/protect" className="flex h-8 w-[91px] items-center gap-1.5">
+            <span className="relative size-6 shrink-0 overflow-clip">
+              <span className="absolute inset-y-0 left-[12.57%] right-[14.13%]">
+                <img
+                  alt=""
+                  src="/landing/mark.svg"
+                  className="absolute inset-0 block h-6 w-[17.592px] max-w-none"
+                />
               </span>
-              <span className="hidden md:inline-flex">
-                <Logo wordmark size={64} />
-              </span>
-            </Link>
-            <div className="hidden h-20 w-px bg-neutrals-3 md:block" />
-          </div>
-          <nav className="hidden items-center gap-[50px] md:flex">
-            {NAV_ITEMS.map((item) => {
-              const isActive = item.id === active;
-              return (
-                <Link
-                  key={item.id}
-                  href={item.href}
-                  className={cn(
-                    "relative flex h-20 items-center font-display text-button-2",
-                    isActive ? "text-neutrals-8" : "text-neutrals-4 hover:text-neutrals-8",
-                  )}
-                >
-                  {item.label}
-                  {isActive ? (
-                    <span
-                      className={cn(
-                        "absolute bottom-0 left-0 h-0.5 w-full rounded-[2px]",
-                        item.id === "liquidity" ? "bg-[#8b5cf6]" : "bg-primary-1",
-                      )}
-                    />
-                  ) : null}
-                </Link>
-              );
-            })}
-          </nav>
+            </span>
+            <span className="whitespace-nowrap text-body-lg font-semibold text-white">Sentinels</span>
+          </a>
         </div>
-        <UiButton
-          type="button"
-          variant="dark"
-          size="small"
-          className="shrink-0 active:scale-[0.98]"
-          disabled={!canConnect}
-          onClick={() => open({ view: isConnected ? "Account" : "Connect" })}
-        >
-          {isConnected && address ? shortenAddress(address) : (
-            <>
-              <span className="md:hidden">Connect</span>
-              <span className="hidden md:inline">Connect wallet</span>
-            </>
-          )}
-        </UiButton>
-      </div>
-      <nav className="flex gap-6 overflow-x-auto px-4 pb-3 md:hidden">
-        {NAV_ITEMS.map((item) => {
-          const isActive = item.id === active;
-          return (
-            <Link
-              key={item.id}
-              href={item.href}
-              className={cn(
-                "shrink-0 font-display text-button-2",
-                isActive ? "text-neutrals-8" : "text-neutrals-4",
-              )}
+        <div className="hidden min-w-px flex-1 items-center justify-center gap-3xl md:flex">
+          {links.map((link) => (
+            <a
+              key={link.label}
+              href={link.href}
+              aria-current={pathname === link.href ? "page" : undefined}
+              className="flex h-6 items-center justify-center gap-1 whitespace-nowrap text-body-sm font-medium text-white"
             >
-              {item.label}
-            </Link>
-          );
-        })}
+              {link.label}
+            </a>
+          ))}
+        </div>
+        <div className="ml-auto flex h-10 w-[99px] shrink-0 flex-col items-end md:ml-0">
+          <Button
+            variant="secondary"
+            size="sm"
+            className="w-[132px]"
+            onClick={() => open({ view: isConnected ? "Account" : "Connect" })}
+          >
+            {isConnected && address ? truncateAddress(parseWalletAddress(address)) : "Connect Wallet"}
+          </Button>
+        </div>
       </nav>
-      <div className="h-px w-full bg-neutrals-3" />
     </header>
   );
 }

@@ -1,92 +1,79 @@
 "use client";
 
-import { Button as UiButton } from "@/components/ui/button";
-import { DetailRows } from "@/components/molecules/detail-rows";
+import { Button } from "@/components/atoms/button";
 
 export type ConfirmRow = {
   label: string;
   value: string;
-  valueClassName?: string;
+  accent?: boolean;
 };
-
-type ConfirmTransactionModalProps = {
-  open: boolean;
-  onCancel: () => void;
-  onConfirm: () => void;
-  action?: string;
-  coverage?: string;
-  youPay?: string;
-  rows?: ConfirmRow[];
-  note?: string;
-};
-
-const DEFAULT_NOTE =
-  "Your premium buys coverage in a single transaction. The full payout is locked in an on-chain vault for the life of the policy, and settles automatically at expiry. There is no claim to file.";
 
 export function ConfirmTransactionModal({
   open,
+  title,
+  rows,
+  note,
+  error,
+  busy,
   onCancel,
   onConfirm,
-  action = "Buy protection",
-  coverage = "150 SOL",
-  youPay = "195.42 USDC",
-  rows,
-  note = DEFAULT_NOTE,
-}: ConfirmTransactionModalProps) {
+}: {
+  open: boolean;
+  title: string;
+  rows: ConfirmRow[];
+  note: string;
+  error?: string | null;
+  busy?: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
   if (!open) return null;
 
-  const detailRows = rows ?? [
-    { label: "Action", value: action },
-    { label: "Coverage", value: coverage },
-    { label: "You pay", value: youPay, valueClassName: "text-primary-4" },
-    { label: "Network fee", value: "~0.00025 SOL" },
-  ];
-
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center px-4 pb-4 pt-16 sm:items-start sm:pb-4 sm:pt-[120px]">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-strong-950/80 px-4">
       <button
         type="button"
         aria-label="Close dialog"
-        className="absolute inset-0 bg-[rgba(20,20,22,0.9)]"
+        className="absolute inset-0"
+        disabled={busy}
         onClick={onCancel}
       />
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="confirm-tx-title"
-        className="relative z-10 flex max-h-[min(90dvh,720px)] w-full max-w-[480px] flex-col gap-5 overflow-y-auto rounded-card border border-neutrals-3 bg-[#141517] p-5 shadow-[0px_24px_48px_-16px_rgba(15,15,15,0.4)] sm:p-7"
+        className="relative z-10 flex w-full max-w-[480px] flex-col gap-lg overflow-clip rounded-md border border-neutral-700 bg-surface-900 p-xl"
       >
-        <h2
-          id="confirm-tx-title"
-          className="m-0 font-display text-[22px] font-bold leading-10 tracking-[-0.22px] text-neutrals-8"
-        >
-          Confirm transaction
+        <h2 id="confirm-tx-title" className="m-0 text-h6 text-white">
+          {title}
         </h2>
-        <p className="m-0 font-body text-caption-2 text-neutrals-5">
-          Review the details below before signing in your wallet.
+        <p className="m-0 text-body-md text-soft-300">
+          {busy ? "Waiting for wallet confirmation…" : "Review the details below before signing in your wallet."}
         </p>
-        <div className="h-px w-full bg-neutrals-3" />
-        <DetailRows rows={detailRows} />
-        <p className="m-0 font-body text-[11px] leading-5 text-neutrals-5">{note}</p>
-        <div className="flex w-full gap-3 overflow-clip">
-          <UiButton
-            type="button"
-            variant="dark"
-            size="medium"
-            className="min-w-0 flex-1"
-            onClick={onCancel}
-          >
+        <div className="h-px w-full bg-neutral-700" />
+        <div className="flex w-full flex-col gap-md">
+          {rows.map((row) => (
+            <div key={row.label} className="flex w-full items-center justify-between">
+              <span className="text-body-sm text-soft-300">{row.label}</span>
+              <span className={row.accent ? "text-body-md font-semibold text-success-500" : "text-body-md font-semibold text-white"}>
+                {row.value}
+              </span>
+            </div>
+          ))}
+        </div>
+        <p className="m-0 text-body-sm text-soft-300">{note}</p>
+        {error ? (
+          <p className="m-0 text-body-sm text-primary-400" role="alert">
+            {error}
+          </p>
+        ) : null}
+        <div className="flex w-full gap-md">
+          <Button variant="secondary" size="md" className="min-w-0 flex-1" disabled={busy} onClick={onCancel}>
             Cancel
-          </UiButton>
-          <UiButton
-            type="button"
-            variant="neutral"
-            size="medium"
-            className="min-w-0 flex-1"
-            onClick={onConfirm}
-          >
-            Confirm & sign
-          </UiButton>
+          </Button>
+          <Button variant="primary" size="md" className="min-w-0 flex-1" disabled={busy} onClick={onConfirm}>
+            {busy ? "Signing…" : "Confirm & sign"}
+          </Button>
         </div>
       </div>
     </div>

@@ -1,19 +1,23 @@
-import { LandingCta } from "@/components/organisms/landing-cta";
-import { LandingFooter } from "@/components/organisms/landing-footer";
-import { LandingHeader } from "@/components/organisms/landing-header";
-import { LandingHero } from "@/components/organisms/landing-hero";
-import { LandingHowItWorks } from "@/components/organisms/landing-how-it-works";
-import { LandingValues } from "@/components/organisms/landing-values";
+import { Benefits } from "@/components/organisms/benefits";
+import { Cta } from "@/components/organisms/cta";
+import { Ecosystem } from "@/components/organisms/ecosystem";
+import { Features } from "@/components/organisms/features";
+import { HomeHero } from "@/components/organisms/home-hero";
+import { SiteFooter } from "@/components/organisms/site-footer";
+import { SiteNav } from "@/components/organisms/site-nav";
 
 export default function Home() {
   return (
-    <div className="min-h-screen overflow-x-clip bg-neutrals-1">
-      <LandingHeader />
-      <LandingHero />
-      <LandingHowItWorks />
-      <LandingValues />
-      <LandingCta />
-      <LandingFooter />
+    <div className="relative min-h-screen overflow-x-clip bg-strong-950">
+      <SiteNav />
+      <HomeHero />
+      <Features />
+      <Benefits />
+      <Ecosystem />
+      <div className="bg-[linear-gradient(to_bottom,rgb(var(--neutral-950))_50%,rgb(var(--neutral-900))_50%)]">
+        <Cta />
+      </div>
+      <SiteFooter />
     </div>
   );
 }
