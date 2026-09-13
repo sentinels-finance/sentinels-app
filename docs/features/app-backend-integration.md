@@ -1,16 +1,14 @@
 # App-backend integration
 
-**Status:** in progress
+**Status:** paused — Market/Liquidity UI shells were removed with the Nexora design-system reset; API routes remain.
 **Owner milestone:** `docs/product/planned/m7-frontend.md`
 
 ## Problem
 
-`app/`'s Market and Liquidity pages were static UI shells (per `docs/features/design-system.md`):
-hardcoded mock arrays for positions/history/pools, a made-up premium-rate constant for quotes,
-and a confirm-transaction modal whose "Confirm" button just closed itself — no call to any API,
-no transaction ever built or signed. Meanwhile `app/server/*` + `app/app/api/*` already had a
-complete, working backend (real on-chain reads for markets/pools/positions/wallet assets, plus
-unsigned-transaction builders for every program instruction) that nothing in the UI called.
+`app/`'s Market and Liquidity pages were static UI shells (hardcoded mock arrays, a made-up
+premium-rate constant, a confirm-transaction modal that only closed itself). Those shells were
+removed when the design system was reset to the Nexora/Figma kit — see
+`docs/features/design-system.md`. The backend routes below remain.
 
 ## Solution
 

@@ -1,0 +1,24 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="58" height="58" viewBox="0 0 58 58" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Solana (SOL)">
+<circle id="Solana (SOL)_2" cx="29" cy="29" r="29" fill="black"/>
+<g id="Solana (SOL)_3">
+<path id="Solana (SOL)_4" d="M17.9781 35.8702C18.179 35.6693 18.4554 35.552 18.7484 35.552H45.3257C45.8114 35.552 46.0542 36.1382 45.7109 36.4815L40.4607 41.7316C40.2598 41.9326 39.9835 42.0498 39.6904 42.0498H13.1131C12.6274 42.0498 12.3846 41.4637 12.7279 41.1204L17.9781 35.8702Z" fill="url(#paint0_linear_0_67)"/>
+<path id="Solana (SOL)_5" d="M40.4607 26.0065C40.2598 25.8055 39.9835 25.6883 39.6904 25.6883H13.1131C12.6274 25.6883 12.3846 26.2744 12.7279 26.6177L17.9781 31.8679C18.179 32.0689 18.4554 32.1861 18.7484 32.1861H45.3257C45.8114 32.1861 46.0542 31.5999 45.7109 31.2566L40.4607 26.0065Z" fill="url(#paint1_linear_0_67)"/>
+<path id="Solana (SOL)_6" d="M17.9781 16.2678C18.1874 16.0669 18.4637 15.9496 18.7484 15.9496H45.3257C45.8114 15.9496 46.0542 16.5358 45.7109 16.8791L40.4607 22.1292C40.2598 22.3302 39.9835 22.4474 39.6904 22.4474H13.1131C12.6274 22.4474 12.3846 21.8613 12.7279 21.518L17.9781 16.2678Z" fill="url(#paint2_linear_0_67)"/>
+</g>
+</g>
+<defs>
+<linearGradient id="paint0_linear_0_67" x1="-47.5021" y1="11.0192" x2="-48.2093" y2="46.6018" gradientUnits="userSpaceOnUse">
+<stop stop-color="#00FFA3"/>
+<stop offset="1" stop-color="#DC1FFF"/>
+</linearGradient>
+<linearGradient id="paint1_linear_0_67" x1="-51.5491" y1="8.90653" x2="-52.2562" y2="44.4892" gradientUnits="userSpaceOnUse">
+<stop stop-color="#00FFA3"/>
+<stop offset="1" stop-color="#DC1FFF"/>
+</linearGradient>
+<linearGradient id="paint2_linear_0_67" x1="-55.5448" y1="6.82008" x2="-56.252" y2="42.4027" gradientUnits="userSpaceOnUse">
+<stop stop-color="#00FFA3"/>
+<stop offset="1" stop-color="#DC1FFF"/>
+</linearGradient>
+</defs>
+</svg>

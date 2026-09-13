@@ -52,9 +52,8 @@ correctness, not scale.
 - Frontend application flows. Only low-fidelity wireframes exist for these at this stage (see
   the delivered wireframe file) — no working UI for market list / Protect / redeem /
   provide-liquidity is built during the MVP program-implementation phase. Program interaction
-  happens via the Anchor TypeScript client / CLI / tests. (`app/` holds a design system, a
-  landing page, and static UI shells for connect / market / liquidity — none of them wired to
-  the chain — see `docs/features/design-system.md` and
+  happens via the Anchor TypeScript client / CLI / tests. (`app/` holds a design system and a
+  landing page — not wired to the chain — see `docs/features/design-system.md` and
   `docs/product/planned/m7-frontend.md`.)
 - CLOB / order matching for large sizes — MVP is LMSR-only.
 - Automated Underwriting Vault with cross-market allocation.

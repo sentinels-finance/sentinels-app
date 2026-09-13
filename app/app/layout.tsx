@@ -1,25 +1,12 @@
 import type { Metadata } from "next";
-import { DM_Sans, Poppins, IBM_Plex_Mono } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
 import { AppKitProvider } from "@/components/providers/appkit-provider";
 
-const dmSans = DM_Sans({
-  subsets: ["latin"],
-  weight: ["700"],
-  style: ["normal", "italic"],
-  variable: "--font-display",
-});
-
-const poppins = Poppins({
+const inter = Inter({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
-  variable: "--font-body",
-});
-
-const plexMono = IBM_Plex_Mono({
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
-  variable: "--font-mono",
+  variable: "--font-inter",
 });
 
 export const metadata: Metadata = {
@@ -35,7 +22,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${dmSans.variable} ${poppins.variable} ${plexMono.variable}`}>
+      <body className={inter.variable}>
         <AppKitProvider>{children}</AppKitProvider>
       </body>
     </html>

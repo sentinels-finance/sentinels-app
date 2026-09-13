@@ -1,73 +1,58 @@
-import Link from "next/link";
-import type { ReactNode } from "react";
-import { Button as UiButton, type ButtonProps as UiButtonProps } from "@/components/ui/button";
+import type { AnchorHTMLAttributes, ButtonHTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
 
-export type ButtonVariant = NonNullable<UiButtonProps["variant"]>;
-export type ButtonSize = NonNullable<UiButtonProps["size"]>;
-export type ButtonIcon = "left" | "right";
+const variants = {
+  primary: "border-white/20 bg-primary-500 text-white shadow-button-primary hover:bg-primary-400",
+  neutral: "border-neutral-950 bg-neutral-800 text-white shadow-button-neutral hover:bg-neutral-700",
+  secondary: "border-white bg-neutral-50 text-neutral-950 shadow-button-secondary hover:bg-white",
+} as const;
 
-type ButtonProps = {
-  href: string;
-  children: ReactNode;
-  variant?: ButtonVariant;
-  size?: ButtonSize;
-  icon?: ButtonIcon;
-  disabled?: boolean;
-  className?: string;
+const sizes = {
+  md: "h-[52px] px-6 text-body-md font-semibold",
+  sm: "h-10 px-3 text-body-sm font-semibold",
+} as const;
+
+type VariantProps = {
+  variant?: keyof typeof variants;
+  size?: keyof typeof sizes;
 };
 
-function StarIcon({ variant }: { variant: ButtonVariant }) {
-  return (
-    <span className="relative size-4 shrink-0 overflow-clip">
-      <img
-        src="/icons/star-filled-on-dark.svg"
-        alt=""
-        width={16}
-        height={16}
-        className={cn(
-          "absolute inset-0 size-4",
-          variant === "light" ? "opacity-0 group-hover:opacity-100" : "opacity-100",
-          variant === "dark" && "group-hover:opacity-0",
-        )}
-      />
-      <img
-        src="/icons/star-filled-on-light.svg"
-        alt=""
-        width={16}
-        height={16}
-        className={cn(
-          "absolute inset-0 size-4",
-          variant === "light" ? "opacity-100 group-hover:opacity-0" : "opacity-0",
-          variant === "dark" && "group-hover:opacity-100",
-        )}
-      />
-    </span>
-  );
-}
+type ButtonAsLink = VariantProps &
+  AnchorHTMLAttributes<HTMLAnchorElement> & {
+    href: string;
+  };
+
+type ButtonAsButton = VariantProps &
+  ButtonHTMLAttributes<HTMLButtonElement> & {
+    href?: undefined;
+  };
 
 export function Button({
-  href,
-  children,
-  variant = "neutral",
-  size = "small",
-  icon,
-  disabled = false,
+  variant = "primary",
+  size = "md",
   className,
-}: ButtonProps) {
+  children,
+  href,
+  ...props
+}: ButtonAsLink | ButtonAsButton) {
+  const classes = cn(
+    "inline-flex shrink-0 items-center justify-center overflow-clip whitespace-nowrap rounded-sm border transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+    variants[variant],
+    sizes[size],
+    className,
+  );
+
+  if (href) {
+    return (
+      <a href={href} className={classes} {...(props as AnchorHTMLAttributes<HTMLAnchorElement>)}>
+        <span className="px-1">{children}</span>
+      </a>
+    );
+  }
+
   return (
-    <UiButton
-      asChild
-      variant={variant}
-      size={size}
-      className={cn("group", className)}
-      aria-disabled={disabled || undefined}
-    >
-      <Link href={disabled ? "#" : href} tabIndex={disabled ? -1 : undefined}>
-        {icon === "left" ? <StarIcon variant={variant} /> : null}
-        {children}
-        {icon === "right" ? <StarIcon variant={variant} /> : null}
-      </Link>
-    </UiButton>
+    <button type="button" className={classes} {...(props as ButtonHTMLAttributes<HTMLButtonElement>)}>
+      <span className="px-1">{children}</span>
+    </button>
   );
 }

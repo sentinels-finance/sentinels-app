@@ -27,8 +27,8 @@ function initAppKit() {
     projectId: REOWN_PROJECT_ID,
     themeMode: "dark",
     themeVariables: {
-      "--apkt-accent": "#3772ff",
-      "--apkt-font-family": "Poppins, ui-sans-serif, system-ui, sans-serif",
+      "--apkt-accent": "#3b82f6",
+      "--apkt-font-family": "Inter, ui-sans-serif, system-ui, sans-serif",
     },
     features: {
       analytics: false,
